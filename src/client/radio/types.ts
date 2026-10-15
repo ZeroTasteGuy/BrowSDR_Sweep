@@ -56,6 +56,8 @@ export interface SdrDevice {
 	getRxStreamStats?(): RxStreamStats;
 
 	startRx(callback: (data: ArrayBufferView) => void): Promise<void>;
+	/** Receive-only firmware sweep over startMHz..stopMHz; callback gets raw 16 KiB sweep blocks. */
+	startSweep?(range: { startMHz: number; stopMHz: number }, callback: (data: ArrayBufferView) => void): Promise<void>;
 	stopRx(): Promise<void>;
 }
 

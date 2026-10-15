@@ -79,6 +79,9 @@ import {
 	feedRemoteAudioChunk,
 } from '@/worker/streams/remote-clients';
 import { startRxStream } from '@/worker/streams/rx-stream';
+import { startSweepStream } from '@/worker/streams/sweep-stream';
+import type { SweepStreamOpts } from '@/worker/streams/types';
+import type { SweepPlan } from '@/devices/hackrf/types';
 import type { VfoParams, VfoState, PerfCounters, RxStreamOpts, RemoteClientState, DeviceOpenOpts } from './types';
 import { displayToDeviceFrequencyHz } from '@/radio/frequency-shift';
 import { selectUsbDevice } from '@/radio/usb-device-selection';
@@ -262,6 +265,14 @@ export class Backend {
 			acarsCallback,
 			radiosondeCallback,
 		);
+	}
+
+	startSweepStream(
+		opts: SweepStreamOpts,
+		spectrumCallback: SamplesCallback,
+		rateCallback: (sweepsPerSecond: number) => void,
+	): Promise<SweepPlan> {
+		return startSweepStream(this, opts, spectrumCallback, rateCallback);
 	}
 
 	getDspStats() {

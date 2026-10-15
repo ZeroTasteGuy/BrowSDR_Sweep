@@ -1,4 +1,5 @@
 import type { VfoParams } from '@/worker/runtime/types';
+import type { SweepRequest } from '@/devices/hackrf/types';
 
 export interface SharedBand {
 	centerBin: number;
@@ -20,4 +21,8 @@ export interface ChannelState {
 	pending: number;
 	key: string;
 	perf: { calls: number; sum: number; max: number };
+}
+
+export interface SweepStreamOpts extends SweepRequest {
+	gains?: Record<string, number>;
 }

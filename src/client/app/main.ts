@@ -34,6 +34,7 @@ import { rdsMethods } from './decoders/rds';
 import { zoomMethods } from './display/zoom';
 import { remoteMethods } from './workspace/remote';
 import { autoGainMethods } from './radio/auto-gain';
+import { sweepMethods } from './radio/sweep';
 import AdsbPanel from './decoders/adsb/panel';
 import { adsbMethods } from './decoders/adsb';
 import { rtl433Methods } from './decoders/rtl433';
@@ -88,6 +89,7 @@ const Receiver = {
 		...zoomMethods,
 		...remoteMethods,
 		...autoGainMethods,
+		...sweepMethods,
 		...rtl433Methods,
 		...adsbMethods,
 		...aisMethods,
@@ -179,6 +181,8 @@ function watchReceiverSettings(this: AppInstance) {
 
 	watchGainChanges.call(this);
 
+	watchSweepSettings.call(this);
+
 	this.$watch(
 		'vfos',
 		() => {
@@ -260,6 +264,44 @@ function watchReceiverSettings(this: AppInstance) {
 			this.saveSetting();
 		},
 		{ deep: true },
+	);
+}
+
+/** Switching mode or editing the range restarts reception on the already-open device; no reconnect. */
+function watchSweepSettings(this: AppInstance) {
+	let restartTimer: ReturnType<typeof setTimeout> | null = null;
+	this._cleanup.push(() => {
+		if (restartTimer) clearTimeout(restartTimer);
+	});
+	const restart = (delay: number) => {
+		if (restartTimer) clearTimeout(restartTimer);
+		restartTimer = setTimeout(() => {
+			restartTimer = null;
+			if (!this.running) return;
+			(async () => {
+				await this.togglePlay();
+				await this.togglePlay(true);
+			})().catch((error: unknown) => console.error(error));
+		}, delay);
+	};
+	this.$watch(
+		() => this.sweep.enabled,
+		(enabled: boolean) => {
+			if (!enabled) this.sweep.active = false;
+			restart(0);
+		},
+	);
+	this.$watch(
+		() => [this.sweep.startMHz, this.sweep.stopMHz, this.sweep.binWidthKHz],
+		() => {
+			if (this.sweep.enabled) restart(600);
+		},
+	);
+	this.$watch(
+		() => this.sweep.peakHold,
+		() => {
+			this._sweepPeak = undefined;
+		},
 	);
 }
 

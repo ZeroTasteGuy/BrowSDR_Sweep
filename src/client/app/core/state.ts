@@ -19,6 +19,7 @@ import type { DSDStatus } from '@/worker/decoders/dsd/types';
 import type { CapabilityIssue } from '@/platform/types';
 import type { Rtl433Status, Rtl433Protocol } from '@/worker/decoders/types';
 import { DEFAULT_FFT_SIZE, DEFAULT_SPECTRUM_RANGE } from '@/display/spectrum-range';
+import type { SweepPlan } from '@/devices/hackrf/types';
 
 export function createAppData() {
 	return {
@@ -46,6 +47,8 @@ export function createAppData() {
 			sampleRate: 20000000,
 			fftSize: DEFAULT_FFT_SIZE,
 		},
+		// HackRF firmware sweep. `enabled` is the user's mode choice; `active` means the display shows sweep data.
+		sweep: createSweepState(),
 		display: {
 			spectrumFps: 20,
 			highResolutionWaterfall: true,
@@ -115,6 +118,19 @@ export function createAppData() {
 			optionA: null as VfoConflictOption,
 			optionB: null as VfoConflictSubsetOption,
 		},
+	};
+}
+
+function createSweepState() {
+	return {
+		enabled: false,
+		active: false,
+		startMHz: 5300,
+		stopMHz: 6000,
+		binWidthKHz: 100,
+		peakHold: true,
+		rate: 0,
+		plan: null as SweepPlan | null,
 	};
 }
 

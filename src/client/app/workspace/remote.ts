@@ -15,6 +15,10 @@ export const remoteMethods = {
 		}
 	},
 	async startRemoteHost(this: AppInstance) {
+		if (this.sweep?.enabled) {
+			this.showMsg('Sharing is unavailable in Sweep mode. Switch back to Normal to share.');
+			return;
+		}
 		if (this.workspace && !this._receiverTransport) return this.workspace.startSharing();
 		console.log('[WebRTC] startRemoteHost clicked');
 		if (!this.connected || (!this.running && !this._receiverTransport)) {

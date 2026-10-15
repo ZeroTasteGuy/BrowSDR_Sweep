@@ -19,9 +19,11 @@ ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSI
 */
 
 import { HackRF } from './usb';
+import { errorMessage } from '@/platform/errors';
 import type { SdrDevice, SdrDeviceInfo, GainControl } from '@/radio/types';
 import { registerDriver } from '@/radio/sdr-device';
 import { HackRFRxLevel } from './rx-level';
+import { SWEEP_BASEBAND_FILTER_HZ, SWEEP_BLOCK_BYTES, SWEEP_OFFSET_HZ, SWEEP_SAMPLE_RATE_HZ, SWEEP_TUNE_STEP_HZ } from './sweep';
 
 export class HackRFDevice implements SdrDevice {
 	readonly deviceType = 'hackrf';
@@ -116,6 +118,34 @@ export class HackRFDevice implements SdrDevice {
 	}
 
 	async startRx(callback: (data: ArrayBufferView) => void): Promise<void> {
+		await this.startStreaming((onData) => this.hackrf.startRx(onData), callback);
+	}
+
+	/** Same mechanism as hackrf_sweep: init_sweep, then RX_SWEEP transceiver mode. Receive only. */
+	async startSweep(range: { startMHz: number; stopMHz: number }, callback: (data: ArrayBufferView) => void): Promise<void> {
+		try {
+			await this.hackrf.usbApiRequired(0x0104);
+		} catch (error) {
+			throw new Error(`Sweep needs HackRF firmware with USB API 1.04 or newer. ${errorMessage(error)}`, { cause: error });
+		}
+		await this.startStreaming(async (onData) => {
+			await this.hackrf.setSampleRateManual(SWEEP_SAMPLE_RATE_HZ, 1);
+			await this.hackrf.setBasebandFilterBandwidth(SWEEP_BASEBAND_FILTER_HZ);
+			await this.hackrf.initSweep(
+				[range.startMHz, range.stopMHz],
+				SWEEP_BLOCK_BYTES,
+				SWEEP_TUNE_STEP_HZ,
+				SWEEP_OFFSET_HZ,
+				HackRF.SWEEP_STYLE_INTERLEAVED,
+			);
+			await this.hackrf.startRxSweep(onData);
+		}, callback);
+	}
+
+	private async startStreaming(
+		begin: (onData: (data: ArrayBufferView) => void) => Promise<void>,
+		callback: (data: ArrayBufferView) => void,
+	): Promise<void> {
 		this.rxLevel.reset();
 		let firstSample: () => void;
 		let timeout: ReturnType<typeof setTimeout>;
@@ -129,7 +159,7 @@ export class HackRFDevice implements SdrDevice {
 		// Attach the rejection handler before USB commands, which may themselves fail.
 		started.catch(() => {});
 		try {
-			await this.hackrf.startRx((data) => {
+			await begin((data) => {
 				this.rxLevel.observe(data);
 				callback(data);
 				firstSample();

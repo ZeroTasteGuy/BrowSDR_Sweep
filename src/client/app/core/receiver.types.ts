@@ -53,6 +53,7 @@ export interface ReceiverInternals {
 	_waterfallClock: WaterfallClock;
 	_remoteSpectrumLimiter: SpectrumFrameLimiter;
 	_lastSpectrumData?: Float32Array;
+	_sweepPeak?: Float32Array;
 	_zoomRepaint?: boolean;
 	_lastFrameTime: number;
 	_framesDrawn: number;
@@ -118,6 +119,8 @@ export interface ReceiverMethods {
 	togglePlay(isRestart?: boolean): Promise<void>;
 	_togglePlay(isRestart?: boolean): Promise<void>;
 	startStream(isRestart?: boolean): Promise<void>;
+	startSweep(): Promise<void>;
+	sweepAvailable(): boolean;
 	initCanvas(): void;
 	resizeFftCanvas(): void;
 	drawSpectrum(data: Float32Array): void;

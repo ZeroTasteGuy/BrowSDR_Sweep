@@ -423,6 +423,13 @@ canvas {
 	color: var(--text-muted);
 	margin: 0;
 }
+.sweep-note {
+	margin: 4px 0;
+	font-size: 11px;
+	line-height: 1.5;
+	color: var(--text-muted);
+	font-variant-numeric: tabular-nums;
+}
 .rx-level-warning {
 	color: var(--accent-red, #ff5555);
 }

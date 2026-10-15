@@ -65,7 +65,7 @@
 						<UiFormRow v-if="info.device.expansion" label="Expansion"><small>{{ info.device.expansion }}</small></UiFormRow>
 					</UiPanel>
 					<UiFormRow v-if="connected && remoteMode === 'none'">
-						<UiButton variant="secondary" style="width: 100%;" @click="startRemoteHost" :disabled="!isOnline" :title="!isOnline ? 'Not available offline' : 'Share remote access via WebRTC'">Share Remote Access</UiButton>
+						<UiButton variant="secondary" style="width: 100%;" @click="startRemoteHost" :disabled="!isOnline || sweep.enabled" :title="!isOnline ? 'Not available offline' : sweep.enabled ? 'Sharing is unavailable in Sweep mode' : 'Share remote access via WebRTC'">Share Remote Access</UiButton>
 					</UiFormRow>
 					<UiFormRow class="remote-host-info" v-if="remoteMode === 'host'">
 						<small>Share this link:</small>
@@ -86,19 +86,42 @@
 					</UiFormRow>
 				</UiPanel>
 
+				<UiPanel label="Sweep" v-if="sweepAvailable()" v-model:collapsed="collapsedPanels['sweep']">
+					<UiFormRow>
+						<UiCheckbox variant="native" v-model="sweep.enabled" label="Sweep mode (HackRF)" style="flex:1" :disabled="remoteMode !== 'none'"></UiCheckbox>
+					</UiFormRow>
+					<p v-if="remoteMode !== 'none'" class="sweep-note" role="status">Sweep is unavailable while sharing. Stop sharing to use it.</p>
+					<template v-if="sweep.enabled">
+						<UiFormRow label="Start">
+							<UiInputGroup unit="MHz"><UiInput type="number" v-model.number="sweep.startMHz" step="1" min="0" title="Sweep start (whole MHz)"></UiInput></UiInputGroup>
+						</UiFormRow>
+						<UiFormRow label="Stop">
+							<UiInputGroup unit="MHz"><UiInput type="number" v-model.number="sweep.stopMHz" step="1" max="7250" title="Sweep stop. Rounded up to a whole number of 20 MHz steps."></UiInput></UiInputGroup>
+						</UiFormRow>
+						<UiFormRow label="Bin width">
+							<UiInputGroup unit="kHz"><UiInput type="number" v-model.number="sweep.binWidthKHz" step="10" min="5" title="Requested FFT bin width. The nearest finer power-of-two FFT is used (5-1250 kHz)."></UiInput></UiInputGroup>
+						</UiFormRow>
+						<UiFormRow>
+							<UiCheckbox variant="native" v-model="sweep.peakHold" label="Peak hold" style="flex:1"></UiCheckbox>
+						</UiFormRow>
+						<p v-if="sweep.plan" class="sweep-note" role="status">{{ sweep.plan.startMHz }}&ndash;{{ sweep.plan.stopMHz }} MHz &middot; {{ (sweep.plan.binWidthHz / 1000).toFixed(1) }} kHz bins<template v-if="running"> &middot; {{ sweep.rate.toFixed(1) }} sweeps/s</template></p>
+						<p class="sweep-note">Gain uses the LNA, VGA and Amp controls below. Levels are relative, not calibrated.</p>
+					</template>
+				</UiPanel>
+
 				<UiPanel label="Radio" :disabled="!connected" v-model:collapsed="collapsedPanels['radio']">
-					<UiFormRow label="Center">
+					<UiFormRow label="Center" v-if="!sweep.enabled">
 						<UiInputGroup unit="MHz">
 							<UiInput type="number" v-model.number="radio.centerFreq" step="0.1" title="Center Frequency (MHz)" :disabled="autoGain.active || (remoteMode === 'client' && locks.centerFreq)"></UiInput>
 						</UiInputGroup>
 						<UiLock v-if="remoteMode === 'host' || (remoteMode === 'client' && locks.centerFreq)" :locked="locks.centerFreq" :host="remoteMode === 'host'" @toggle="locks.centerFreq = !locks.centerFreq"></UiLock>
 					</UiFormRow>
-					<UiFormRow label="Freq Shift">
+					<UiFormRow label="Freq Shift" v-if="!sweep.enabled">
 						<UiInputGroup unit="MHz">
 							<UiInput type="number" v-model.number="radio.frequencyShift" step="0.001" title="Displayed frequency = SDR frequency + shift. Use -125 MHz for a typical 125 MHz upconverter." :disabled="autoGain.active || remoteMode === 'client'"></UiInput>
 						</UiInputGroup>
 					</UiFormRow>
-					<UiFormRow label="Sample Rate">
+					<UiFormRow label="Sample Rate" v-if="!sweep.enabled">
 						<UiSelect v-model.number="radio.sampleRate" :disabled="autoGain.active || (remoteMode === 'client' && locks.sampleRate)">
 							<template v-if="deviceCapabilities">
 								<option v-for="rate in deviceCapabilities.sampleRates" :key="rate" :value="rate">{{ rate>= 1000000 ? (rate / 1000000) + ' MSPS' : (rate / 1000) + ' kSPS' }}</option>
@@ -115,7 +138,7 @@
 						<UiLock v-if="remoteMode === 'host' || (remoteMode === 'client' && locks.sampleRate)" :locked="locks.sampleRate" :host="remoteMode === 'host'" @toggle="locks.sampleRate = !locks.sampleRate"></UiLock>
 					</UiFormRow>
 					<!-- Dynamic gain controls based on connected device -->
-					<div class="auto-gain" v-if="autoGainSupported() && remoteMode !== 'client'">
+					<div class="auto-gain" v-if="autoGainSupported() && remoteMode !== 'client' && !sweep.enabled">
 						<div class="gain-actions">
 							<UiMenu :id="receiverId + '-auto-gain-options'" label="Auto gain preferences" primary-label="Auto set gains" :groups="autoGainOptions()" :disabled="!running || autoGain.active" @primary="autoSetGains('balanced')" @select="autoSetGains($event)" />
 							<GainReset />
@@ -125,7 +148,7 @@
 							<p role="status"><template v-if="autoGain.status">{{ autoGain.mode === 'sensitivity' ? 'Weak signals' : autoGain.mode === 'strong' ? 'Strong signals' : 'Balanced' }} · </template>{{ autoGain.status }}<template v-if="autoGain.level"> · RMS {{ autoGain.level.rmsDbfs.toFixed(1) }} dBFS · peak {{ autoGain.level.peakDbfs.toFixed(1) }} dBFS · {{ (autoGain.level.clippedFraction * 100).toFixed(3) }}% clipped</template></p>
 					</div>
 					<template v-if="deviceCapabilities">
-						<RxLevel />
+						<RxLevel v-if="!sweep.enabled" />
 						<component v-for="group in gainControlGroups" :key="group.name" :is="group.name ? 'UiPanel' : 'div'" v-bind="group.name ? { label: group.name, collapsed: !radioAdvanced } : {}" @update:collapsed="radioAdvanced = !$event" :class="group.name ? 'radio-advanced' : 'gain-controls'">
 						<p v-if="group.name">Stop reception before changing transport options.</p>
 						<UiFormRow v-for="gc in group.controls" :key="gc.name">
@@ -150,6 +173,7 @@
 					<p v-if="deviceCapabilities?.deviceType === 'limesdr' && gains['Receive Mode'] === 1" role="status">USB-only diagnostic: source counters remain active; spectrum and audio are disabled.</p>
 				</UiPanel>
 
+				<template v-if="!sweep.enabled">
 				<VfoPanel v-for="(vfo, i) in vfos" :key="'vfo-panel-' + i" :vfo="vfo" :i="i" />
 
 				<!-- Add VFO button -->
@@ -158,6 +182,7 @@
 					<UiButton variant="primary" @click="addVfo" :disabled="gains['Receive Mode'] === 1">+ Add VFO</UiButton>
 					</div>
 				</div>
+				</template>
 
 				<!-- Bookmarks panel -->
 				<div class="panel">

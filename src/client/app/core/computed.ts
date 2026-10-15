@@ -90,13 +90,18 @@ export const computedProperties = {
 	},
 	// Calculate the min/max display bandwidth based on sampleRate AND zoom state
 	minFreq(this: AppInstance) {
-		const baseMin = this.radio.centerFreq - this.radio.sampleRate / 2 / 1e6;
-		const baseSpan = this.radio.sampleRate / 1e6;
+		const { baseMin, baseSpan } = spectrumBand(this);
 		return baseMin + baseSpan * this.view.zoomOffset;
 	},
 	maxFreq(this: AppInstance) {
-		const baseMin = this.radio.centerFreq - this.radio.sampleRate / 2 / 1e6;
-		const baseSpan = this.radio.sampleRate / 1e6;
+		const { baseMin, baseSpan } = spectrumBand(this);
 		return baseMin + baseSpan * (this.view.zoomOffset + 1.0 / this.view.zoomScale);
 	},
 };
+
+/** The band the spectrum covers: the receiver's sample-rate span, or the swept range in sweep mode. */
+function spectrumBand(app: AppInstance) {
+	const plan = app.sweep.active ? app.sweep.plan : null;
+	if (plan) return { baseMin: plan.startMHz, baseSpan: plan.stopMHz - plan.startMHz };
+	return { baseMin: app.radio.centerFreq - app.radio.sampleRate / 2 / 1e6, baseSpan: app.radio.sampleRate / 1e6 };
+}

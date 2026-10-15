@@ -17,6 +17,7 @@ import { createAppData } from '@/app/core/state';
 import { computedProperties } from '@/app/core/computed';
 import { uiHelperMethods, watchVfoSelection } from '@/app/core/ui-helpers';
 import { autoGainMethods } from '@/app/radio/auto-gain';
+import { sweepMethods } from '@/app/radio/sweep';
 import { rdsMethods } from '@/app/decoders/rds';
 import AdsbPanel from '@/app/decoders/adsb/panel';
 import { adsbMethods } from '@/app/decoders/adsb';
@@ -59,6 +60,7 @@ export const ReceiverView = defineComponent({
 	methods: {
 		...uiHelperMethods,
 		...autoGainMethods,
+		...sweepMethods,
 		...rdsMethods,
 		...rtl433Methods,
 		...adsbMethods,

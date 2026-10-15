@@ -158,6 +158,10 @@ LimeSDR-USB reception supports sample rates up to **61.44 MSPS**.
 
 Choose **RX1** or **RX2** using **RX Channel** in the Radio panel, then select **LNAH**, **LNAL**, or **LNAW** under **Antenna** to match the H, L, or W connector in that receiver's antenna group. One receiver is streamed at a time; switching briefly restarts reception while retaining the current frequency, gains, and antenna path. The receiver and antenna selections are saved locally.
 
+### HackRF sweep mode
+
+With a HackRF connected, tick **Sweep mode (HackRF)** in the Sweep panel to view a wide range (default 5300–6000 MHz) in one spectrum and waterfall. It uses the firmware's own `hackrf_sweep` mechanism (USB API 1.04 or newer), receive only. Set start and stop in MHz (the stop is rounded up to a whole number of 20 MHz steps), the bin width (the nearest finer power-of-two FFT is used, 5–1250 kHz) and the LNA, VGA and Amp gains. The panel shows the sweep rate, and **Peak hold** adds a max-hold trace. Levels are relative, not calibrated. Unticking the box returns to the normal receiver without reconnecting. Sweep is not available while sharing, and sharing is disabled while sweep is on.
+
 ### Automatic receive gains (LimeSDR and HackRF)
 
 Use **Auto set gains** while receiving to adjust LimeSDR LNA, TIA and PGA, or
