@@ -131,14 +131,14 @@ function createSweepState() {
 		active: false,
 		startMHz: 5540,
 		stopMHz: 5960,
-		binWidthKHz: 78.125,
-		peakHold: true,
+		binWidthKHz: 4.8828125,
+		peakHold: false,
 		/** How fast held peaks fall back toward the live trace, in dB per second; 0 holds forever. */
 		peakFadeDbPerSecond: 0,
 		/** Number the strongest peaks on the spectrum. */
 		peakMarkers: true,
 		/** FPV band whose channel centres are drawn; '' for none. */
-		channelBand: 'IMD8C',
+		channelBand: 'IMD6C',
 		rate: 0,
 		plan: null as SweepPlan | null,
 		peaks: [] as SweepPeak[],
@@ -260,9 +260,9 @@ function createAutoGainState() {
 		status: '',
 		level: null as RxLevel | null,
 		/** Keep adjusting in the background while reception runs. */
-		enabled: false,
+		enabled: true,
 		/** 0 = weak signals (more gain), 100 = strong signals (more headroom). */
-		target: 50,
+		target: 20,
 		/** Let auto gain switch the HackRF RF amp on. Off near transmitters. */
 		allowAmp: false,
 		overload: false,

@@ -64,18 +64,18 @@ describe('receiver uses the shared UI', () => {
 		expect(wrapper.text()).not.toContain('Shared VFO DSP');
 		expect(wrapper.get('.big-freq').text()).toBe('5800.000MHz');
 	});
-	it('defaults sweep to the 5.8 GHz FPV range on IMD8C, and moves older saved sweep choices to the new defaults once', () => {
+	it('defaults sweep to the 5.8 GHz FPV range on IMD6C, and moves older saved sweep choices to the new defaults once', () => {
 		const storage = new Map<string, string>();
 		vi.stubGlobal('localStorage', {
 			getItem: (key: string) => storage.get(key) ?? null,
 			setItem: (key: string, value: string) => storage.set(key, value),
 		});
 		wrapper = mount(ReceiverView);
-		expect(wrapper.vm.sweep).toMatchObject({ enabled: false, startMHz: 5540, stopMHz: 5960, channelBand: 'IMD8C' });
+		expect(wrapper.vm.sweep).toMatchObject({ enabled: false, startMHz: 5540, stopMHz: 5960, channelBand: 'IMD6C' });
 		const old = { startMHz: 5300, stopMHz: 6000, channelBand: 'R', peakMarkers: false };
 		storage.set('SDRSetting', JSON.stringify({ sweep: old }));
 		settingsMethods.loadSetting.call(wrapper.vm as unknown as AppInstance);
-		expect(wrapper.vm.sweep).toMatchObject({ startMHz: 5540, stopMHz: 5960, channelBand: 'IMD8C', peakMarkers: false });
+		expect(wrapper.vm.sweep).toMatchObject({ startMHz: 5540, stopMHz: 5960, channelBand: 'IMD6C', peakMarkers: false });
 		storage.set('SDRSetting', JSON.stringify({ sweep: { ...old, defaultsVersion: 2 } }));
 		settingsMethods.loadSetting.call(wrapper.vm as unknown as AppInstance);
 		expect(wrapper.vm.sweep).toMatchObject({ startMHz: 5300, stopMHz: 6000, channelBand: 'R' });

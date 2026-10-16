@@ -12,6 +12,9 @@ it('switches auto gain with the toggle and presets, and sets the target and amp 
 		running: false,
 	});
 	const panel = wrapper.get('.auto-gain');
+	// New receivers start with auto gain on at the Scan setting.
+	expect(wrapper.vm.autoGain).toMatchObject({ enabled: true, target: 20 });
+	await panel.get('.auto-gain-toggle input').setValue(false);
 	expect(panel.text()).toContain('Auto gain off');
 	await panel.get('.auto-gain-toggle input').setValue(true);
 	expect(wrapper.vm.autoGain.enabled).toBe(true);
