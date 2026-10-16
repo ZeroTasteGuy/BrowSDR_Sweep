@@ -4,6 +4,7 @@ import { HackRFDevice } from '@/devices/hackrf/device';
 import { HackRFRxLevel } from '@/devices/hackrf/rx-level';
 import { hackrfGainProfile, hackrfGainTotal, nextHackRFGain, createHackRFGainAdjustment } from '@/radio/hackrf-auto-gain';
 import { autoGainMethods } from '@/app/radio/auto-gain';
+import { emergencyStopMethods, isEmergencyStopKey } from '@/app/radio/emergency-stop';
 
 afterEach(() => vi.useRealTimers());
 const level = (rmsDbfs = -22, peakDbfs = -8, clippedFraction = 0) => ({
@@ -19,7 +20,8 @@ describe('HackRF ADC level measurements', () => {
 	it('interprets USB bytes as signed IQ and respects view offsets without changing data', () => {
 		const buffer = new Uint8Array(4104).fill(127);
 		const data = buffer.subarray(4, 4100);
-		data.fill(192); // -64 as a signed byte
+		// ±64, alternating every two IQ pairs so the strided sampling sees both.
+		data.forEach((_, index) => (data[index] = index % 8 < 4 ? 192 : 64));
 		const original = buffer.slice();
 		const meter = new HackRFRxLevel();
 		meter.reset(1000);
@@ -29,6 +31,26 @@ describe('HackRF ADC level measurements', () => {
 		expect(meter.level.clippedFraction).toBe(0);
 		expect(meter.level.samples).toBeLessThanOrEqual(2048);
 		expect(buffer).toEqual(original);
+	});
+	it('removes the DC offset from RMS and peak but still reports it raw', () => {
+		const tone = (offset) => new Int8Array(4096).map((_, index) => (index % 8 < 4 ? -32 : 32) + offset);
+		const meter = new HackRFRxLevel();
+		meter.reset(1000);
+		meter.observe(tone(0), 1250);
+		const clean = meter.level;
+		meter.observe(tone(40), 1500);
+		const offset = meter.level;
+		expect(offset.rmsDbfs).toBeCloseTo(clean.rmsDbfs);
+		expect(offset.peakDbfs).toBeCloseTo(clean.peakDbfs);
+		expect(offset.rawRmsDbfs).toBeGreaterThan(clean.rawRmsDbfs + 3);
+	});
+	it('treats a pure DC offset as low gain, not a dead stream', () => {
+		const meter = new HackRFRxLevel();
+		meter.reset(1000);
+		meter.observe(new Int8Array(4096).fill(6), 1250);
+		expect(meter.level.rmsDbfs).toBe(-120);
+		expect(nextHackRFGain({ LNA: 0, VGA: 0, 'Amp (14dB)': 0 }, meter.level).done).toBe(false);
+		expect(hackrfGainTotal(nextHackRFGain({ LNA: 0, VGA: 0, 'Amp (14dB)': 0 }, meter.level).gains)).toBeGreaterThan(0);
 	});
 	it('detects both ADC rails, reports silent samples and clears stale measurements', () => {
 		const meter = new HackRFRxLevel();
@@ -54,7 +76,7 @@ describe('HackRF ADC level measurements', () => {
 		const callback = vi.fn();
 		const starting = device.startRx(callback);
 		await vi.advanceTimersByTimeAsync(300);
-		const samples = new Int8Array(4096).fill(-16);
+		const samples = new Int8Array(4096).map((_, index) => (index % 8 < 4 ? -16 : 16));
 		transfers.shift()({ status: 'ok', data: new DataView(samples.buffer) });
 		await vi.advanceTimersByTimeAsync(1);
 		await starting;
@@ -160,10 +182,12 @@ describe('HackRF one-shot automatic gain lifecycle', () => {
 		await run;
 		const writes = app.backend.setGain.mock.calls;
 		expect(writes.at(-1)).toEqual(['Amp (14dB)', 1]);
+		// 72 dB drops by 16 dB to 56 dB before the amp goes on.
 		expect(writes.slice(0, -1)).toEqual([
-			['LNA', 0],
-			['VGA', 0],
+			['LNA', 24],
+			['VGA', 32],
 		]);
+		expect(app.gains.LNA + app.gains.VGA).toBe(56);
 		expect(app.gains['Amp (14dB)']).toBe(1);
 	});
 	it('turns the RF amplifier off before increasing downstream gain after overload', async () => {
@@ -236,13 +260,12 @@ describe('HackRF gain preferences', () => {
 		const starting = { LNA: 16, VGA: 16, 'Amp (14dB)': 0 };
 		const weak = nextHackRFGain(starting, level(-20, -8), 'sensitivity');
 		expect(weak.gains['Amp (14dB)']).toBe(1);
-		expect(weak.gains.LNA).toBe(0);
-		expect(weak.gains).toEqual({ LNA: 0, VGA: 0, 'Amp (14dB)': 1 });
+		expect(weak.gains).toEqual({ LNA: 16, VGA: 0, 'Amp (14dB)': 1 });
 		expect(weak.done).toBe(false);
 		const strong = nextHackRFGain(weak.gains, level(-28, -14), 'strong');
 		expect(strong.gains['Amp (14dB)']).toBe(0);
 		expect(strong.gains.LNA).toBeLessThan(strong.gains.VGA);
-		expect(hackrfGainTotal(strong.gains)).toBe(10);
+		expect(hackrfGainTotal(strong.gains)).toBe(26);
 	});
 	it('retains clipping protection in sensitivity mode and can inhibit amp retries', () => {
 		const starting = { LNA: 32, VGA: 40, 'Amp (14dB)': 1 };
@@ -265,7 +288,7 @@ describe('bounded HackRF amplifier trials', () => {
 	});
 	it('retries once at reduced gain and holds the amp off after a second failure', () => {
 		const adjust = createHackRFGainAdjustment('sensitivity');
-		expect(adjust({ LNA: 32, VGA: 26, 'Amp (14dB)': 0 }, level(-25, -9)).gains).toEqual({ LNA: 0, VGA: 0, 'Amp (14dB)': 1 });
+		expect(adjust({ LNA: 32, VGA: 26, 'Amp (14dB)': 0 }, level(-25, -9)).gains).toEqual({ LNA: 40, VGA: 2, 'Amp (14dB)': 1 });
 		const raised = { LNA: 24, VGA: 4, 'Amp (14dB)': 1 };
 		const reduced = adjust(raised, level(-12, -1, 0.01));
 		expect(reduced.gains['Amp (14dB)']).toBe(0);
@@ -308,14 +331,44 @@ it('uses the bounded amp retry policy through the one-shot receiver lifecycle', 
 	expect(app.autoGain.status).toContain('Amp kept off after repeated overload');
 });
 
-it('raises gain gradually from minimum after enabling the amp, using fresh measurements', () => {
+it('raises gain gradually from the staged level after enabling the amp, using fresh measurements', () => {
 	const adjust = createHackRFGainAdjustment('sensitivity');
 	let current = adjust({ LNA: 32, VGA: 26, 'Amp (14dB)': 0 }, level(-25, -9)).gains;
-	expect(current).toEqual({ LNA: 0, VGA: 0, 'Amp (14dB)': 1 });
+	expect(current).toEqual({ LNA: 40, VGA: 2, 'Amp (14dB)': 1 });
 	for (let step = 0; step < 10; step++) {
 		const next = adjust(current, level(-45, -20));
 		expect(next.gains['Amp (14dB)']).toBe(1);
 		expect(hackrfGainTotal(next.gains) - hackrfGainTotal(current)).toBe(2);
 		current = next.gains;
 	}
+});
+
+describe('spacebar emergency stop', () => {
+	it('turns the amp off and gains to minimum before stopping reception', async () => {
+		const calls = [];
+		const app = {
+			...emergencyStopMethods,
+			connected: true,
+			running: true,
+			remoteMode: 'none',
+			deviceCapabilities: { deviceType: 'hackrf' },
+			autoGain: { active: false },
+			gains: { LNA: 40, VGA: 62, 'Amp (14dB)': 1 },
+			backend: { setGains: vi.fn(async (gains) => calls.push(['gains', gains])) },
+			togglePlay: vi.fn(async () => {
+				calls.push(['stop']);
+				app.running = false;
+			}),
+			showMsg: vi.fn(),
+		};
+		await app.emergencyStop();
+		expect(calls).toEqual([['gains', { 'Amp (14dB)': 0, LNA: 0, VGA: 0 }], ['stop']]);
+		expect(app.gains).toEqual({ LNA: 0, VGA: 0, 'Amp (14dB)': 0 });
+	});
+	it('ignores space while typing in a field', () => {
+		const key = (target, extra = {}) => ({ code: 'Space', repeat: false, target, ...extra });
+		expect(isEmergencyStopKey(key({ tagName: 'DIV' }))).toBe(true);
+		expect(isEmergencyStopKey(key({ tagName: 'INPUT' }))).toBe(false);
+		expect(isEmergencyStopKey(key({ tagName: 'DIV' }, { repeat: true }))).toBe(false);
+	});
 });

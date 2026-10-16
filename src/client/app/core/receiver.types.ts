@@ -222,6 +222,7 @@ export interface ReceiverMethods {
 	cancelAutoGain(): void;
 	autoGainOptions(): UiMenuGroup[];
 	autoSetGains(mode?: AutoGainMode): Promise<void>;
+	emergencyStop(): Promise<void>;
 	toggleBlePanel(): void;
 	_onBleMessage(index: number, freq: number, msg: BleMessage): void;
 	tuneBleChannel(channel: number, index?: number): Promise<boolean>;

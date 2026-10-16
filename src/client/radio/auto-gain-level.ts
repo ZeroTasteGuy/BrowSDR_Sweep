@@ -4,7 +4,9 @@ import type { RxLevel, AutoGainMode } from './types';
 export function gainAdjustment(level: RxLevel, mode: AutoGainMode = 'balanced'): number {
 	if (![level.rmsDbfs, level.peakDbfs, level.clippedFraction].every(Number.isFinite) || level.samples < 100)
 		throw new Error('Invalid receiver level measurement');
-	if (level.rmsDbfs <= -100) throw new Error('Receiver samples are silent; check the USB stream');
+	// Only the DC offset left at low gain: the stream is alive, just raise the gain.
+	if ((level.rawRmsDbfs ?? level.rmsDbfs) <= -100) throw new Error('Receiver samples are silent; check the USB stream');
+	if (level.rmsDbfs <= -100) return 3;
 	if (receiverOverloaded(level)) return -6;
 	const target = mode === 'strong' ? -28 : mode === 'sensitivity' ? -20 : -22;
 	const peak = mode === 'strong' ? -12 : -6;

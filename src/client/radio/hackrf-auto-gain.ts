@@ -4,6 +4,8 @@ import { gainAdjustment, gainAdjustmentReason, receiverOverloaded } from './auto
 // RF amp gain varies with frequency; use 10 dB only to stage a conservative
 // transition, then measure the actual ADC level again.
 const ampEstimate = 10;
+// The amp's nominal 14 dB plus a margin, taken out of LNA/VGA when it switches on.
+const ampStaging = 16;
 export const hackrfGainTotal = (gains: HackRFGains) => gains.LNA + gains.VGA + (gains['Amp (14dB)'] ? ampEstimate : 0);
 
 /** Balance IF and baseband gain, using HackRF's 8 dB LNA / 2 dB VGA steps. */
@@ -30,7 +32,10 @@ export function nextHackRFGain(gains: HackRFGains, level: RxLevel, mode: AutoGai
 	const overloaded = receiverOverloaded(level);
 	const nextAmp = amplifierPreference(gains, mode, change, overloaded || !allowAmp);
 	if (nextAmp && !amp) {
-		return { gains: { LNA: 0, VGA: 0, 'Amp (14dB)': 1 }, done: false, reason: 'Enabling RF amplifier at minimum LNA/VGA gain' };
+		// Take out a little more than the amp adds, then climb from there. Starting
+		// again from 0 dB would use up the step limit before reaching a weak signal.
+		const staged = hackrfGainProfile(total - ampStaging, mode);
+		return { gains: { ...staged, 'Amp (14dB)': 1 }, done: false, reason: 'Enabling RF amplifier with reduced LNA/VGA gain' };
 	}
 	const next =
 		change || nextAmp !== amp || mode !== 'balanced'

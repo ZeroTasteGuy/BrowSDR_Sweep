@@ -34,6 +34,8 @@ export interface RxLevel {
 	samples: number;
 	rmsDbfs: number;
 	peakDbfs: number;
+	/** RMS including the DC offset, when the meter removes it from `rmsDbfs`. */
+	rawRmsDbfs?: number;
 	clippedFraction: number;
 }
 
