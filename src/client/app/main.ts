@@ -247,7 +247,7 @@ function watchReceiverSettings(this: AppInstance) {
 	);
 
 	this.$watch(
-		() => [this.display.waterfallSmoothing, this.display.spectrumSplit],
+		() => [this.display.waterfallSmoothing, this.display.smoothingAxes, this.display.spectrumSplit],
 		() => {
 			this.saveSetting();
 			applyWaterfallSmoothing(this);

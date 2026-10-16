@@ -316,6 +316,14 @@
 				<UiPanel label="Display" :id="receiverId + '-display-panel'" v-model:collapsed="collapsedPanels['display']">
 					<ContrastControls />
 					<UiFormRow>
+						<label :for="receiverId + '-smoothing-axes'">Smoothing</label>
+						<UiSelect :id="receiverId + '-smoothing-axes'" v-model="display.smoothingAxes" title="Which way the Smooth slider by the waterfall averages. Frequency smoothing calms the noise grain but widens narrow signals a little.">
+							<option value="time">Time (y)</option>
+							<option value="both">Time + frequency</option>
+							<option value="frequency">Frequency (x)</option>
+						</UiSelect>
+					</UiFormRow>
+					<UiFormRow>
 						<label :for="receiverId + '-spectrum-fps'">Spectrum FPS</label>
 						<UiSelect :id="receiverId + '-spectrum-fps'" v-model.number="display.spectrumFps" title="Spectrum and waterfall display update rate; does not change radio settings or audio. Higher rates use more CPU. Remote reception is capped locally and cannot exceed the host's rate.">
 							<option :value="20">20 FPS</option>

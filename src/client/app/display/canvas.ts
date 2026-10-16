@@ -295,30 +295,60 @@ function renderWaterfallFrame(this: AppInstance, data: Float32Array<ArrayBufferL
 export function applyWaterfallSmoothing(app: AppInstance) {
 	const engine = app._waterfallEngine;
 	if (!(engine instanceof HighResolutionWaterfall)) return;
-	engine.setSmoothing(app.display.waterfallSmoothing);
+	const { time, frequency } = smoothingAmounts(app);
+	engine.setSmoothing(time, frequency);
 	engine.render();
 }
 
+/** How much to smooth over time and across frequency, from the Smooth amount and its direction. */
+export function smoothingAmounts(app: AppInstance) {
+	const amount = Math.max(0, Math.min(0.95, app.display.waterfallSmoothing || 0));
+	const axes = app.display.smoothingAxes;
+	return { time: axes === 'frequency' ? 0 : amount, frequency: axes === 'time' ? 0 : amount };
+}
+
 /**
- * Exponential average over time, in dB, so noise settles into an even floor.
+ * Smoothing for the standard renderer, which keeps only colours and so smooths new rows only:
+ * an exponential average over time and a short weighted average across neighbouring bins, in dB.
  * Returns the input untouched when smoothing is off.
  */
 export function smoothWaterfallRow(app: AppInstance, row: Float32Array<ArrayBufferLike>): Float32Array<ArrayBufferLike> {
 	// The high-resolution renderer smooths the whole history itself.
-	const amount = app._waterfallEngine instanceof HighResolutionWaterfall ? 0 : app.display.waterfallSmoothing;
-	if (!(amount > 0)) {
+	const amounts = app._waterfallEngine instanceof HighResolutionWaterfall ? { time: 0, frequency: 0 } : smoothingAmounts(app);
+	const smoothed = amounts.frequency > 0 ? smoothAcross(row, Math.min(0.7, amounts.frequency)) : row;
+	if (!(amounts.time > 0)) {
 		app._waterfallSmoothed = undefined;
-		return row;
+		return smoothed;
 	}
 	const average = app._waterfallSmoothed;
-	if (!average || average.length !== row.length) {
-		app._waterfallSmoothed = row.slice();
+	if (!average || average.length !== smoothed.length) {
+		app._waterfallSmoothed = smoothed.slice();
 		return app._waterfallSmoothed;
 	}
-	const keep = Math.min(amount, 0.95);
-	const take = 1 - keep;
-	for (let i = 0; i < row.length; i++) average[i] = average[i] * keep + row[i] * take;
+	const take = 1 - amounts.time;
+	for (let i = 0; i < smoothed.length; i++) average[i] = average[i] * amounts.time + smoothed[i] * take;
 	return average;
+}
+
+function smoothAcross(row: Float32Array<ArrayBufferLike>, keep: number) {
+	const out = new Float32Array(row.length);
+	for (let i = 0; i < row.length; i++) {
+		let total = row[i];
+		let weight = 1;
+		let w = keep;
+		for (let d = 1; d <= 4 && w >= 0.05; d++, w *= keep) {
+			if (i - d >= 0) {
+				total += w * row[i - d];
+				weight += w;
+			}
+			if (i + d < row.length) {
+				total += w * row[i + d];
+				weight += w;
+			}
+		}
+		out[i] = total / weight;
+	}
+	return out;
 }
 
 /** A bright tick at both edges of the waterfall row where auto gain changed the gain. */

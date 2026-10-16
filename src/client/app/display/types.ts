@@ -9,6 +9,7 @@ export interface DisplayState {
 	spectrumFps: number;
 	sharedChannelization: boolean;
 	waterfallSmoothing: number;
+	smoothingAxes: SmoothingAxes;
 	spectrumSplit: number;
 	minDB: number;
 	maxDB: number;
@@ -23,3 +24,6 @@ export interface SweepSelection {
 	touchMove(e: TouchEvent, touchStartX: number, touchStartY: number): boolean;
 	touchEnd(e: TouchEvent): boolean;
 }
+
+/** Which way waterfall smoothing averages: over time (vertical), across frequency (horizontal), or both. */
+export type SmoothingAxes = 'time' | 'both' | 'frequency';

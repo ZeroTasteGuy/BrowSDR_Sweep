@@ -23,6 +23,7 @@ export default defineComponent({
 			<input class="vertical" type="range" min="0" max="95" step="5" :value="smooth" @input="setSmooth" aria-label="Waterfall smoothing">
 			<output>{{ smooth }}%</output>
 		</label>
+		<button type="button" class="smooth-axes" @click="nextAxes" :title="axesTitle" :aria-label="axesTitle">{{ axesText }}</button>
 	</div>`,
 	setup() {
 		const receiver = inject<AppInstance>('receiver');
@@ -33,12 +34,25 @@ export default defineComponent({
 			() => (receiver.view.zoomScale < 10 ? receiver.view.zoomScale.toFixed(1) : receiver.view.zoomScale.toFixed(0)) + '×',
 		);
 		const smooth = computed(() => Math.round(receiver.display.waterfallSmoothing * 100));
+		const AXES = {
+			time: ['Y', 'Smoothing over time (y). Click for time and frequency.'],
+			both: ['XY', 'Smoothing over time and frequency (x and y). Click for frequency only.'],
+			frequency: ['X', 'Smoothing across frequency (x). Click for time only.'],
+		} as const;
+		const axesText = computed(() => AXES[receiver.display.smoothingAxes][0]);
+		const axesTitle = computed(() => AXES[receiver.display.smoothingAxes][1]);
 		const value = (event: Event) => Number((event.target as HTMLInputElement).value);
 		return {
 			receiver,
 			zoom,
 			zoomText,
 			smooth,
+			axesText,
+			axesTitle,
+			nextAxes() {
+				const order = ['time', 'both', 'frequency'] as const;
+				receiver.display.smoothingAxes = order[(order.indexOf(receiver.display.smoothingAxes) + 1) % order.length];
+			},
 			setZoom(event: Event) {
 				const { view } = receiver;
 				const scale = Math.max(1, Math.min(MAX_ZOOM, Math.pow(MAX_ZOOM, value(event) / 1000)));

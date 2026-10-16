@@ -21,6 +21,7 @@ import type { Rtl433Status, Rtl433Protocol } from '@/worker/decoders/types';
 import { DEFAULT_FFT_SIZE, DEFAULT_SPECTRUM_RANGE } from '@/display/spectrum-range';
 import type { SweepPlan } from '@/devices/hackrf/types';
 import type { SweepPeak } from '@/display/types';
+import type { SmoothingAxes } from '@/app/display/types';
 
 export function createAppData() {
 	return {
@@ -57,6 +58,7 @@ export function createAppData() {
 			sharedChannelization: true,
 			/** 0 shows each waterfall line as measured; up to 0.95 averages it with the lines before. */
 			waterfallSmoothing: 0,
+			smoothingAxes: 'time' as SmoothingAxes,
 			/** Share of the plot height the spectrum takes, in percent. */
 			spectrumSplit: 45,
 			...DEFAULT_SPECTRUM_RANGE,

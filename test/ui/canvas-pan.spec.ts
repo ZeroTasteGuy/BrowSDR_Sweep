@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { mountCanvas, smoothWaterfallRow } from '@/app/display/canvas';
+import { mountCanvas, smoothingAmounts, smoothWaterfallRow } from '@/app/display/canvas';
 import type { AppInstance } from '@/app/core/receiver.types';
 
 describe('canvas mouse panning', () => {
@@ -53,7 +53,7 @@ describe('canvas mouse panning', () => {
 
 describe('waterfall smoothing', () => {
 	it('passes rows through when off and averages them over time when on', () => {
-		const app = { display: { waterfallSmoothing: 0 } } as unknown as AppInstance;
+		const app = { display: { waterfallSmoothing: 0, smoothingAxes: 'time' } } as unknown as AppInstance;
 		const row = new Float32Array([-100, -50]);
 		expect(smoothWaterfallRow(app, row)).toBe(row);
 		app.display.waterfallSmoothing = 0.5;
@@ -63,6 +63,27 @@ describe('waterfall smoothing', () => {
 		expect(Array.from(smoothWaterfallRow(app, new Float32Array([-70])))).toEqual([-70]);
 		app.display.waterfallSmoothing = 0;
 		smoothWaterfallRow(app, row);
+		expect(app._waterfallSmoothed).toBeUndefined();
+	});
+});
+
+describe('waterfall smoothing direction', () => {
+	it('splits the Smooth amount into time and frequency by the chosen direction', () => {
+		const app = { display: { waterfallSmoothing: 0.6, smoothingAxes: 'time' } } as unknown as AppInstance;
+		expect(smoothingAmounts(app)).toEqual({ time: 0.6, frequency: 0 });
+		app.display.smoothingAxes = 'both';
+		expect(smoothingAmounts(app)).toEqual({ time: 0.6, frequency: 0.6 });
+		app.display.smoothingAxes = 'frequency';
+		expect(smoothingAmounts(app)).toEqual({ time: 0, frequency: 0.6 });
+	});
+
+	it('averages neighbouring bins in frequency mode without keeping history', () => {
+		const app = { display: { waterfallSmoothing: 0.5, smoothingAxes: 'frequency' } } as unknown as AppInstance;
+		const out = smoothWaterfallRow(app, new Float32Array([-100, -100, -40, -100, -100]));
+		expect(out[2]).toBeGreaterThan(-100);
+		expect(out[2]).toBeLessThan(-40);
+		expect(out[1]).toBeGreaterThan(-100);
+		expect(out[1]).toBeLessThan(out[2]);
 		expect(app._waterfallSmoothed).toBeUndefined();
 	});
 });

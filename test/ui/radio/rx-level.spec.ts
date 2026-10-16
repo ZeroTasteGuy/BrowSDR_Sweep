@@ -28,7 +28,7 @@ it('keeps slider scales and the unedited bound fixed, including at crossing limi
 it('keeps Top and Floor apart, sets centre-anchored zoom and waterfall smoothing from the side sliders', async () => {
 	const applyZoomToEngine = vi.fn();
 	const receiver = reactive({
-		display: { minDB: -110, maxDB: -50, waterfallSmoothing: 0 },
+		display: { minDB: -110, maxDB: -50, waterfallSmoothing: 0, smoothingAxes: 'time' },
 		view: { zoomScale: 1, zoomOffset: 0 },
 		applyZoomToEngine,
 	});
@@ -48,6 +48,14 @@ it('keeps Top and Floor apart, sets centre-anchored zoom and waterfall smoothing
 	expect(receiver.view.zoomScale).toBeCloseTo(10);
 	expect(receiver.view.zoomOffset + 0.5 / receiver.view.zoomScale).toBeCloseTo(0.5);
 	expect(applyZoomToEngine).toHaveBeenCalled();
+	const axes = wrapper.get('.smooth-axes');
+	expect(axes.text()).toBe('Y');
+	await axes.trigger('click');
+	expect(receiver.display.smoothingAxes).toBe('both');
+	await axes.trigger('click');
+	expect(receiver.display.smoothingAxes).toBe('frequency');
+	await axes.trigger('click');
+	expect(receiver.display.smoothingAxes).toBe('time');
 	wrapper.unmount();
 });
 

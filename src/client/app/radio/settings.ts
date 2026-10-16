@@ -104,6 +104,7 @@ function restoreDisplaySettings(this: AppInstance, setting: Record<string, unkno
 		}
 	}
 	this.display.spectrumFps = normalizeSpectrumFps(this.display.spectrumFps);
+	if (!['time', 'both', 'frequency'].includes(this.display.smoothingAxes)) this.display.smoothingAxes = 'time';
 	Object.assign(this.display, validContrastRange(this.display.minDB, this.display.maxDB));
 }
 

@@ -22,8 +22,9 @@ uniform float levelOffset;
 uniform float levelBins;
 uniform float levelScale;
 uniform vec2 range;
-// Waterfall smoothing: weight of each older row, 0 for none.
+// Waterfall smoothing: weight of each older row and of each neighbouring column, 0 for none.
 uniform float keep;
+uniform float keepX;
 
 float powerAt(float index, float slot) {
     float location = levelOffset + clamp(index, 0.0, levelBins - 1.0);
@@ -32,10 +33,10 @@ float powerAt(float index, float slot) {
     return -192.0 + (encodedPower.r * 65280.0 + encodedPower.a * 255.0) * (256.0 / 65535.0);
 }
 
-float peakAt(float row) {
+float peakAt(float row, float dx) {
     float slot = mod(current - row + slots, slots);
-    float left = (offset + (gl_FragCoord.x - 0.5) / viewport.x / zoom) * bins / levelScale;
-    float right = (offset + (gl_FragCoord.x + 0.5) / viewport.x / zoom) * bins / levelScale;
+    float left = (offset + (gl_FragCoord.x + dx - 0.5) / viewport.x / zoom) * bins / levelScale;
+    float right = (offset + (gl_FragCoord.x + dx + 0.5) / viewport.x / zoom) * bins / levelScale;
     float first = floor(left);
     float peak = -192.0;
     for (int i = 0; i < 5; i++) {
@@ -45,16 +46,31 @@ float peakAt(float row) {
     return peak;
 }
 
-// Each shown row averages itself with the older rows below it, so the whole
-// history follows the smoothing setting, not just the rows drawn after a change.
+// Frequency smoothing: average with the neighbouring screen columns.
+float levelAt(float row) {
+    float total = peakAt(row, 0.0);
+    if (keepX <= 0.0) return total;
+    float weight = 1.0;
+    float w = keepX;
+    for (int d = 1; d <= 4; d++) {
+        if (w < 0.05) break;
+        total += w * (peakAt(row, -float(d)) + peakAt(row, float(d)));
+        weight += 2.0 * w;
+        w *= keepX;
+    }
+    return total / weight;
+}
+
+// Time smoothing: each shown row averages itself with the older rows below it,
+// so the whole history follows the setting, not just rows drawn after a change.
 vec4 colourAt(float row) {
     if (row > validRows) return vec4(0.0, 0.0, 0.0, 1.0);
-    float total = peakAt(row);
+    float total = levelAt(row);
     float weight = 1.0;
     float w = keep;
     for (int k = 1; k < 16; k++) {
         if (w < 0.02 || row + float(k) > validRows) break;
-        total += w * peakAt(row + float(k));
+        total += w * levelAt(row + float(k));
         weight += w;
         w *= keep;
     }

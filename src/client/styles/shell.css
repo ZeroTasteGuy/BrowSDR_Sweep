@@ -336,3 +336,18 @@ input[type='range'] {
 .contrast-buttons {
 	gap: 8px;
 }
+
+.view-sliders .smooth-axes {
+	margin: 4px 6px 0;
+	padding: 2px 0;
+	font-size: 10px;
+	font-weight: 600;
+	color: var(--text-main);
+	background: var(--bg-raised);
+	border: 1px solid var(--border);
+	border-radius: 5px;
+	cursor: pointer;
+}
+.view-sliders .smooth-axes:hover {
+	border-color: var(--accent);
+}

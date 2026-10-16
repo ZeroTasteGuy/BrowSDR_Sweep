@@ -86,9 +86,11 @@ export class HighResolutionWaterfall {
 		this.gl.uniform2f(this.gl.getUniformLocation(this.program, 'range'), minDB, maxDB);
 	}
 
-	/** 0 to 0.95: how much each older row counts towards the one above it. Applies to the whole history. */
-	setSmoothing(keep: number) {
-		this.uniform('keep', Math.max(0, Math.min(0.95, keep)));
+	/** 0 to 0.95: how much older rows (time) and neighbouring columns (frequency) count. Applies to the whole history. */
+	setSmoothing(keepTime: number, keepFrequency = 0) {
+		this.uniform('keep', Math.max(0, Math.min(0.95, keepTime)));
+		// Fewer, nearer columns than rows, so narrow carriers keep their shape.
+		this.uniform('keepX', Math.max(0, Math.min(0.7, keepFrequency)));
 	}
 
 	setZoom(offset: number, scale: number) {
