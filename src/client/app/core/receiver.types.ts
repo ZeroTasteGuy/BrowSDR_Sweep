@@ -90,6 +90,8 @@ export interface ReceiverInternals {
 	_autoGainLoop?: number | null;
 	/** Set while code, not the user, writes `gains`. */
 	_gainsFromCode?: boolean;
+	/** Mark the next waterfall row: auto gain just changed the gain. */
+	_gainMarkerPending?: boolean;
 	_hostRunning?: boolean;
 	_resumeAfterHostPause?: boolean;
 	_pendingImportFile: File | null;

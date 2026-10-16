@@ -5,6 +5,7 @@ import { HackRFRxLevel } from '@/devices/hackrf/rx-level';
 import { hackrfGainProfile, hackrfGainTotal, nextHackRFGain, createHackRFGainAdjustment } from '@/radio/hackrf-auto-gain';
 import { autoGainMethods } from '@/app/radio/auto-gain';
 import { gainBand } from '@/app/radio/gain-bands';
+import { withGainMarker } from '@/app/display/canvas';
 
 afterEach(() => vi.useRealTimers());
 const level = (rmsDbfs = -22, peakDbfs = -8, clippedFraction = 0) => ({
@@ -447,4 +448,11 @@ it('groups frequencies into FPV bands for remembered gains', () => {
 	expect(gainBand(2440)).toBe('2.4G');
 	expect(gainBand(868)).toBe('900M');
 	expect(gainBand(433.92)).toBe('400M');
+});
+
+it('marks gain changes with a bright tick at both waterfall edges', () => {
+	const row = withGainMarker(new Float32Array(1000).fill(-100), -40);
+	expect(row[0]).toBe(-20);
+	expect(row[999]).toBe(-20);
+	expect(row[500]).toBe(-100);
 });

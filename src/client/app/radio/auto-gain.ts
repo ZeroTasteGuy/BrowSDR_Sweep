@@ -41,14 +41,7 @@ export const autoGainMethods = {
 		Object.assign(this.autoGain, { target: preset.target, allowAmp: !!preset.allowAmp, enabled: true });
 	},
 	autoGainLoopWanted(this: AppInstance) {
-		return (
-			this.autoGain.enabled &&
-			this.running &&
-			this.connected &&
-			this.remoteMode !== 'client' &&
-			this.autoGainSupported() &&
-			!this.sweepMode()
-		);
+		return this.autoGain.enabled && this.running && this.connected && this.remoteMode !== 'client' && this.autoGainSupported();
 	},
 	/** Write gains without counting it as a manual change, which would switch auto gain off. */
 	async setGainsFromCode(this: AppInstance, gains: Record<string, number>) {
@@ -72,7 +65,8 @@ export const autoGainMethods = {
 		const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 		const tuning = () =>
 			JSON.stringify([
-				this.radio.centerFreq,
+				// In sweep mode the level covers the whole sweep range.
+				this.sweepMode() ? [this.sweep.startMHz, this.sweep.stopMHz] : this.radio.centerFreq,
 				this.radio.sampleRate,
 				this.radio.frequencyShift,
 				this.gains['RX Channel'],
@@ -335,6 +329,7 @@ async function applyLoopGains(this: AppInstance, names: string[], nextGains: Rec
 	this.autoGain.active = true;
 	try {
 		await applyGainChanges.call(this, names, nextGains, applied, wanted);
+		this._gainMarkerPending = true;
 	} catch (error) {
 		if (wanted()) this.autoGain.status = errorMessage(error);
 	} finally {

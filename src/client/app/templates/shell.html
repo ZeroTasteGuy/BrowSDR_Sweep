@@ -173,7 +173,7 @@
 						<UiLock v-if="remoteMode === 'host' || (remoteMode === 'client' && locks.sampleRate)" :locked="locks.sampleRate" :host="remoteMode === 'host'" @toggle="locks.sampleRate = !locks.sampleRate"></UiLock>
 					</UiFormRow>
 					<!-- Dynamic gain controls based on connected device -->
-					<div class="auto-gain" v-if="autoGainSupported() && remoteMode !== 'client' && !sweepMode()">
+					<div class="auto-gain" v-if="autoGainSupported() && remoteMode !== 'client'">
 						<div class="gain-actions">
 							<UiCheckbox v-model="autoGain.enabled" label="Auto gain" class="auto-gain-toggle" title="Keep adjusting LNA, VGA and amp while receiving" />
 							<GainReset />
@@ -201,10 +201,10 @@
 							</template>
 							<template v-else-if="gc.type === 'slider'">
 								<label>{{ gc.name }} Gain</label>
-								<UiSlider :class="{ 'auto-driven': autoGain.enabled && autoGainSupported() && !sweepMode() }" v-model="gains[gc.name]" :input-label="gc.name + ' Gain'" :min="gc.min" :max="gc.max" :step="gc.step" :disabled="autoGain.active || (remoteMode === 'client' && locks[gc.name])">{{ deviceCapabilities.deviceType === 'limesdr' && gc.name === 'PGA' ? gains.PGA - 12 : gc.options ? (gc.options[gains[gc.name]] / 10).toFixed(1) : gains[gc.name] }} dB</UiSlider>
+								<UiSlider :class="{ 'auto-driven': autoGain.enabled && autoGainSupported() }" v-model="gains[gc.name]" :input-label="gc.name + ' Gain'" :min="gc.min" :max="gc.max" :step="gc.step" :disabled="autoGain.active || (remoteMode === 'client' && locks[gc.name])">{{ deviceCapabilities.deviceType === 'limesdr' && gc.name === 'PGA' ? gains.PGA - 12 : gc.options ? (gc.options[gains[gc.name]] / 10).toFixed(1) : gains[gc.name] }} dB</UiSlider>
 							</template>
 							<template v-else>
-								<UiCheckbox variant="native" :class="{ 'auto-driven': autoGain.enabled && autoGainSupported() && !sweepMode() }" v-model="gains[gc.name]" :true-value="1" :false-value="0" :label="gc.name" style="flex:1" :style="{ opacity: (remoteMode === 'client' && locks[gc.name]) ? 0.5 : 1 }" :disabled="autoGain.active || (remoteMode === 'client' && locks[gc.name])"></UiCheckbox>
+								<UiCheckbox variant="native" :class="{ 'auto-driven': autoGain.enabled && autoGainSupported() }" v-model="gains[gc.name]" :true-value="1" :false-value="0" :label="gc.name" style="flex:1" :style="{ opacity: (remoteMode === 'client' && locks[gc.name]) ? 0.5 : 1 }" :disabled="autoGain.active || (remoteMode === 'client' && locks[gc.name])"></UiCheckbox>
 							</template>
 							<UiLock v-if="remoteMode === 'host' || (remoteMode === 'client' && locks[gc.name])" :locked="locks[gc.name]" :host="remoteMode === 'host'" @toggle="locks[gc.name] = !locks[gc.name]"></UiLock>
 						</UiFormRow>
