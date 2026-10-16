@@ -212,8 +212,12 @@ canvas {
 .tick {
 	position: absolute;
 	bottom: 2px;
+	padding: 0 3px;
+	border-radius: 3px;
+	/* Keeps labels readable when the trace runs along the bottom edge. */
+	background: rgba(0, 0, 0, 0.7);
 	font-size: 11px;
-	color: rgba(255, 255, 255, 0.6);
+	color: rgba(255, 255, 255, 0.75);
 	transform: translateX(-50%);
 	font-family: 'Roboto Mono', monospace;
 }
@@ -429,6 +433,18 @@ canvas {
 	line-height: 1.5;
 	color: var(--text-muted);
 	font-variant-numeric: tabular-nums;
+}
+.sweep-error {
+	color: var(--accent-red, #ff5555);
+}
+.sweep-range-display {
+	font-family: 'Roboto Mono', monospace;
+	font-size: 15px;
+	color: #00ffea;
+	white-space: nowrap;
+	padding: 4px 10px;
+	border: 1px solid var(--border);
+	border-radius: 4px;
 }
 .rx-level-warning {
 	color: var(--accent-red, #ff5555);

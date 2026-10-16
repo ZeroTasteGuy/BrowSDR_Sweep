@@ -127,7 +127,7 @@ function createSweepState() {
 		active: false,
 		startMHz: 5300,
 		stopMHz: 6000,
-		binWidthKHz: 100,
+		binWidthKHz: 78.125,
 		peakHold: true,
 		rate: 0,
 		plan: null as SweepPlan | null,

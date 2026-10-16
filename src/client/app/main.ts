@@ -34,7 +34,7 @@ import { rdsMethods } from './decoders/rds';
 import { zoomMethods } from './display/zoom';
 import { remoteMethods } from './workspace/remote';
 import { autoGainMethods } from './radio/auto-gain';
-import { sweepMethods } from './radio/sweep';
+import { normalizedSweepRange, sweepMethods } from './radio/sweep';
 import AdsbPanel from './decoders/adsb/panel';
 import { adsbMethods } from './decoders/adsb';
 import { rtl433Methods } from './decoders/rtl433';
@@ -294,13 +294,18 @@ function watchSweepSettings(this: AppInstance) {
 	this.$watch(
 		() => [this.sweep.startMHz, this.sweep.stopMHz, this.sweep.binWidthKHz],
 		() => {
-			if (this.sweep.enabled) restart(600);
+			// Show the range the firmware will really sweep (the stop rounds up to whole 20 MHz steps).
+			const range = normalizedSweepRange(this.sweep);
+			if (range) Object.assign(this.sweep, range);
+			this.saveSetting();
+			if (this.sweep.enabled) restart(0);
 		},
 	);
 	this.$watch(
 		() => this.sweep.peakHold,
 		() => {
 			this._sweepPeak = undefined;
+			this.saveSetting();
 		},
 	);
 }

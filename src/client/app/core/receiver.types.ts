@@ -121,6 +121,8 @@ export interface ReceiverMethods {
 	startStream(isRestart?: boolean): Promise<void>;
 	startSweep(): Promise<void>;
 	sweepAvailable(): boolean;
+	sweepBinWidthOptions(): Array<{ value: number; label: string }>;
+	sweepError(): string;
 	initCanvas(): void;
 	resizeFftCanvas(): void;
 	drawSpectrum(data: Float32Array): void;

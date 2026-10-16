@@ -17,6 +17,12 @@ export const SWEEP_MAX_MHZ = 7250;
 const MIN_FFT_SIZE = 16;
 const MAX_FFT_SIZE = 4096;
 
+/** The bin widths a sweep can actually use: 20 MHz divided by each power-of-two FFT size, widest first. */
+export const SWEEP_BIN_WIDTHS_HZ = Array.from(
+	{ length: Math.log2(MAX_FFT_SIZE / MIN_FFT_SIZE) + 1 },
+	(_, i) => SWEEP_SAMPLE_RATE_HZ / (MIN_FFT_SIZE * 2 ** i),
+);
+
 export function planSweep({ startMHz, stopMHz, binWidthHz }: SweepRequest): SweepPlan {
 	if (![startMHz, stopMHz, binWidthHz].every(Number.isFinite)) throw new Error('Sweep start, stop and bin width must be numbers.');
 	const start = Math.floor(startMHz);

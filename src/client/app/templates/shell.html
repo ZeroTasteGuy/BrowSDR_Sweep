@@ -9,7 +9,10 @@
 				<svg viewBox="0 0 24 24" width="24" height="24"><path fill="currentColor" d="M12 .3a12 12 0 0 0-3.8 23.38c.6.12.82-.26.82-.58l-.01-2.05c-3.34.73-4.04-1.61-4.04-1.61-.55-1.39-1.34-1.76-1.34-1.76-1.08-.74.08-.73.08-.73 1.2.09 1.84 1.24 1.84 1.24 1.07 1.83 2.8 1.3 3.49 1 .1-.78.42-1.3.76-1.6-2.67-.31-5.47-1.34-5.47-5.93 0-1.31.47-2.38 1.24-3.22-.14-.3-.54-1.52.1-3.18 0 0 1-.32 3.3 1.23a11.5 11.5 0 0 1 6.02 0c2.28-1.55 3.29-1.23 3.29-1.23.64 1.66.24 2.88.12 3.18a4.65 4.65 0 0 1 1.23 3.22c0 4.61-2.8 5.62-5.48 5.92.42.36.81 1.1.81 2.22l-.01 3.29c0 .32.21.7.82.58A12 12 0 0 0 12 .3"/></svg>
 		</a>
 		<div class="vfo-displays" ref="headerVfos">
-			<UiFrequencyDisplay v-for="(vfo, i) in vfos" :key="'vfo-disp-' + i" v-model="vfo.displayFreq" :index="i" :color="vfoColor(i)" :active="activeVfoIndex === i" :receiving="vfo.squelchEnabled && vfoSquelchOpen[i]" :enabled="vfo.enabled" :out-of-band="!isFreqInBandwidth(vfo.freq)" :bookmark="vfoBookmarkLabel(i) || undefined" @select="activeVfoIndex = i" @apply="applyVfoFreq($event, i)" @focus="focusVfoFreq(i)"></UiFrequencyDisplay>
+			<div v-if="sweep.active && sweep.plan" class="sweep-range-display" title="Sweep mode shows this whole range; VFOs are paused">Sweep {{ sweep.plan.startMHz }}&ndash;{{ sweep.plan.stopMHz }} MHz</div>
+			<template v-else>
+				<UiFrequencyDisplay v-for="(vfo, i) in vfos" :key="'vfo-disp-' + i" v-model="vfo.displayFreq" :index="i" :color="vfoColor(i)" :active="activeVfoIndex === i" :receiving="vfo.squelchEnabled && vfoSquelchOpen[i]" :enabled="vfo.enabled" :out-of-band="!isFreqInBandwidth(vfo.freq)" :bookmark="vfoBookmarkLabel(i) || undefined" @select="activeVfoIndex = i" @apply="applyVfoFreq($event, i)" @focus="focusVfoFreq(i)"></UiFrequencyDisplay>
+			</template>
 		</div>
 		<div class="top-controls" ref="headerControls">
 			<UiButton variant="icon" @click="toggleDisplayLock" :class="{ active: view.locked }" :aria-pressed="view.locked" title="Lock Tuning & Zooming">
@@ -93,18 +96,21 @@
 					<p v-if="remoteMode !== 'none'" class="sweep-note" role="status">Sweep is unavailable while sharing. Stop sharing to use it.</p>
 					<template v-if="sweep.enabled">
 						<UiFormRow label="Start">
-							<UiInputGroup unit="MHz"><UiInput type="number" v-model.number="sweep.startMHz" step="1" min="0" title="Sweep start (whole MHz)"></UiInput></UiInputGroup>
+							<UiInputGroup unit="MHz"><UiInput type="number" v-model.lazy.number="sweep.startMHz" step="1" min="0" title="Sweep start (whole MHz). Applies when you press Enter or leave the field."></UiInput></UiInputGroup>
 						</UiFormRow>
 						<UiFormRow label="Stop">
-							<UiInputGroup unit="MHz"><UiInput type="number" v-model.number="sweep.stopMHz" step="1" max="7250" title="Sweep stop. Rounded up to a whole number of 20 MHz steps."></UiInput></UiInputGroup>
+							<UiInputGroup unit="MHz"><UiInput type="number" v-model.lazy.number="sweep.stopMHz" step="1" max="7250" title="Sweep stop. Rounded up to a whole number of 20 MHz steps. Applies when you press Enter or leave the field."></UiInput></UiInputGroup>
 						</UiFormRow>
 						<UiFormRow label="Bin width">
-							<UiInputGroup unit="kHz"><UiInput type="number" v-model.number="sweep.binWidthKHz" step="10" min="5" title="Requested FFT bin width. The nearest finer power-of-two FFT is used (5-1250 kHz)."></UiInput></UiInputGroup>
+							<UiSelect v-model.number="sweep.binWidthKHz" title="Frequency resolution. Narrower bins show more detail but make each sweep slower and heavier to draw.">
+								<option v-for="option in sweepBinWidthOptions()" :key="option.value" :value="option.value">{{ option.label }}</option>
+							</UiSelect>
 						</UiFormRow>
 						<UiFormRow>
 							<UiCheckbox variant="native" v-model="sweep.peakHold" label="Peak hold" style="flex:1"></UiCheckbox>
 						</UiFormRow>
-						<p v-if="sweep.plan" class="sweep-note" role="status">{{ sweep.plan.startMHz }}&ndash;{{ sweep.plan.stopMHz }} MHz &middot; {{ (sweep.plan.binWidthHz / 1000).toFixed(1) }} kHz bins<template v-if="running"> &middot; {{ sweep.rate.toFixed(1) }} sweeps/s</template></p>
+						<p v-if="sweepError()" class="sweep-note sweep-error" role="alert">{{ sweepError() }}</p>
+						<p v-if="sweep.plan" class="sweep-note" role="status">{{ sweep.plan.startMHz }}&ndash;{{ sweep.plan.stopMHz }} MHz &middot; {{ (sweep.plan.binWidthHz / 1000).toFixed(2) }} kHz bins<template v-if="running"> &middot; {{ sweep.rate.toFixed(1) }} sweeps/s</template></p>
 						<p class="sweep-note">Gain uses the LNA, VGA and Amp controls below. Levels are relative, not calibrated.</p>
 					</template>
 				</UiPanel>

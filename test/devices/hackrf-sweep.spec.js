@@ -3,7 +3,8 @@ import { beforeAll, describe, expect, it, vi } from 'vitest';
 import { FFT, initSync } from '/wasm/dsp/browsdr_dsp.js';
 import { HackRF } from '@/devices/hackrf/usb';
 import { HackRFDevice } from '@/devices/hackrf/device';
-import { SWEEP_BLOCK_BYTES, SweepAssembler, parseSweepBlocks, planSweep, sweepWindow } from '@/devices/hackrf/sweep';
+import { SWEEP_BIN_WIDTHS_HZ, SWEEP_BLOCK_BYTES, SweepAssembler, parseSweepBlocks, planSweep, sweepWindow } from '@/devices/hackrf/sweep';
+import { normalizedSweepRange } from '@/app/radio/sweep';
 
 beforeAll(() => {
 	initSync({ module: readFileSync(new URL('../../wasm/dsp/pkg/browsdr_dsp_bg.wasm', import.meta.url)) });
@@ -56,6 +57,28 @@ describe('sweep planning', () => {
 		expect(() => planSweep({ startMHz: 6000, stopMHz: 5300, binWidthHz: 1e5 })).toThrow('higher than start');
 		expect(() => planSweep({ startMHz: 100, stopMHz: 7300, binWidthHz: 1e5 })).toThrow('7250');
 		expect(() => planSweep({ startMHz: NaN, stopMHz: 7300, binWidthHz: 1e5 })).toThrow('numbers');
+	});
+});
+
+describe('sweep settings', () => {
+	it('offers exactly the bin widths the FFT can produce', () => {
+		expect(SWEEP_BIN_WIDTHS_HZ[0]).toBe(1_250_000);
+		expect(SWEEP_BIN_WIDTHS_HZ.at(-1)).toBeCloseTo(4882.8125);
+		for (const hz of SWEEP_BIN_WIDTHS_HZ) expect(planSweep({ startMHz: 5300, stopMHz: 6000, binWidthHz: hz }).binWidthHz).toBe(hz);
+	});
+
+	it('normalizes a range to what the firmware sweeps, and rejects invalid ones', () => {
+		expect(normalizedSweepRange({ startMHz: 5330.4, stopMHz: 6000, binWidthKHz: 1 })).toEqual({
+			startMHz: 5330,
+			stopMHz: 6010,
+			binWidthKHz: 4.8828125,
+		});
+		expect(normalizedSweepRange({ startMHz: 5300, stopMHz: 6000, binWidthKHz: 78.125 })).toEqual({
+			startMHz: 5300,
+			stopMHz: 6000,
+			binWidthKHz: 78.125,
+		});
+		expect(normalizedSweepRange({ startMHz: 6000, stopMHz: 5300, binWidthKHz: 78.125 })).toBeNull();
 	});
 });
 

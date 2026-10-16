@@ -4,6 +4,7 @@ import { normalizeSpectrumFps } from '@/display/spectrum-rate';
 import { DEFAULT_FFT_SIZE, normalizedSpectrumRange, SPECTRUM_RANGE_VERSION } from '@/display/spectrum-range';
 import { isRecord, restoreFields, primitiveMap } from '@/platform/data';
 import { validContrastRange } from '@/display/contrast';
+import { normalizedSweepRange } from './sweep';
 
 export const settingsMethods = {
 	saveSetting(this: AppInstance) {
@@ -18,6 +19,8 @@ export const settingsMethods = {
 			view: this.view,
 			collapsedPanels: this.collapsedPanels,
 			recentRemoteIds: this.recentRemoteIds,
+			// Sweep mode itself is not restored: it only applies once a HackRF is connected.
+			sweep: savedSweepSettings(this.sweep),
 		};
 		const json = JSON.stringify(obj);
 		localStorage.setItem(this.settingsKey || 'SDRSetting', json);
@@ -55,6 +58,7 @@ export const settingsMethods = {
 				if (typeof setting.activeVfoIndex === 'number') this.activeVfoIndex = setting.activeVfoIndex;
 				else if (typeof setting.activeVfo === 'number') this.activeVfoIndex = setting.activeVfo - 1;
 				if (setting.view) restoreFields(this.view, setting.view);
+				restoreSweepSettings.call(this, setting.sweep);
 				if (primitiveMap<boolean>(setting.collapsedPanels, 'boolean')) Object.assign(this.collapsedPanels, setting.collapsedPanels);
 				if (Array.isArray(setting.recentRemoteIds))
 					this.recentRemoteIds = setting.recentRemoteIds.filter((id: unknown): id is string => typeof id === 'string');
@@ -123,4 +127,15 @@ function restoreVfoSettings(this: AppInstance, setting: Record<string, unknown>)
 			this.vfos.push(vfo2);
 		}
 	}
+}
+
+function savedSweepSettings(sweep: AppInstance['sweep'] | undefined) {
+	return sweep && { startMHz: sweep.startMHz, stopMHz: sweep.stopMHz, binWidthKHz: sweep.binWidthKHz, peakHold: sweep.peakHold };
+}
+
+function restoreSweepSettings(this: AppInstance, saved: unknown) {
+	const fields = savedSweepSettings(this.sweep);
+	if (!fields) return;
+	restoreFields(fields, saved);
+	Object.assign(this.sweep, fields, normalizedSweepRange(fields));
 }
