@@ -136,8 +136,8 @@ export interface ReceiverMethods {
 	sweepPresetId(): string;
 	applySweepPreset(id: string): void;
 	clearSweepPeaks(): void;
-	selectSweepRange(fromMHz: number, toMHz: number): void;
-	previousSweepRange(): void;
+	zoomToSweepRange(fromMHz: number, toMHz: number): void;
+	previousSweepZoom(): void;
 	peakChannel(freqMHz: number): string;
 	initCanvas(): void;
 	resizeFftCanvas(): void;

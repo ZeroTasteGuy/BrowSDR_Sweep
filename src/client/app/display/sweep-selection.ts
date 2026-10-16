@@ -7,7 +7,7 @@ const MIN_SELECTION_PX = 6;
 const TOUCH_START_PX = 10;
 
 /**
- * Drag across the spectrum in sweep mode to sweep just that part. The canvas mouse and touch handlers
+ * Drag across the spectrum in sweep mode to zoom the display in on that part; the sweep range stays as it is. The canvas mouse and touch handlers
  * hand events here first; each method returns true when it consumed the event.
  */
 export function createSweepSelection(app: AppInstance): SweepSelection {
@@ -32,7 +32,7 @@ export function createSweepSelection(app: AppInstance): SweepSelection {
 		const selection = app._sweepSelection;
 		selecting = false;
 		app._sweepSelection = undefined;
-		if (selection && endX !== null && Math.abs(endX - startX) >= MIN_SELECTION_PX) app.selectSweepRange(selection.fromMHz, selection.toMHz);
+		if (selection && endX !== null && Math.abs(endX - startX) >= MIN_SELECTION_PX) app.zoomToSweepRange(selection.fromMHz, selection.toMHz);
 		repaintSpectrum(app);
 	};
 	return {

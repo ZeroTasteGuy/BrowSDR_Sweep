@@ -1,6 +1,6 @@
 import * as Comlink from 'comlink';
 import type { AppInstance } from '@/app/core/receiver.types';
-import { planSweep, SWEEP_BIN_WIDTHS_HZ, SWEEP_MAX_MHZ } from '@/devices/hackrf/sweep';
+import { planSweep, SWEEP_BIN_WIDTHS_HZ } from '@/devices/hackrf/sweep';
 import { errorMessage } from '@/platform/errors';
 import { resetSweepTraces } from '@/app/display/sweep-overlay';
 import { channelLabel, FPV_BANDS, PEAK_FADE_OPTIONS, SWEEP_PRESETS } from '@/display/fpv';
@@ -27,19 +27,26 @@ export const sweepMethods = {
 	clearSweepPeaks(this: AppInstance) {
 		resetSweepTraces(this);
 	},
-	/** Sweep just the part of the spectrum dragged across; the old range can be brought back with previousSweepRange. */
-	selectSweepRange(this: AppInstance, fromMHz: number, toMHz: number) {
-		const startMHz = Math.max(0, Math.floor(Math.min(fromMHz, toMHz)));
-		const stopMHz = Math.min(SWEEP_MAX_MHZ, Math.ceil(Math.max(fromMHz, toMHz)));
-		if (stopMHz <= startMHz || (startMHz === this.sweep.startMHz && stopMHz === this.sweep.stopMHz)) return;
-		const history = this.sweep.rangeHistory;
-		history.push({ startMHz: this.sweep.startMHz, stopMHz: this.sweep.stopMHz });
-		if (history.length > RANGE_HISTORY_LIMIT) history.shift();
-		Object.assign(this.sweep, { startMHz, stopMHz });
+	/** Zoom the display in on the part of the spectrum dragged across, without changing what the HackRF sweeps. */
+	zoomToSweepRange(this: AppInstance, fromMHz: number, toMHz: number) {
+		const plan = this.sweep.plan;
+		if (!plan) return;
+		const spanMHz = plan.stopMHz - plan.startMHz;
+		const from = (Math.min(fromMHz, toMHz) - plan.startMHz) / spanMHz;
+		const to = (Math.max(fromMHz, toMHz) - plan.startMHz) / spanMHz;
+		const zoomScale = Math.min(MAX_ZOOM, 1 / Math.max(to - from, 1e-9));
+		const zoomOffset = Math.max(0, Math.min(1 - 1 / zoomScale, (from + to) / 2 - 0.5 / zoomScale));
+		const history = this.sweep.zoomHistory;
+		history.push({ zoomScale: this.view.zoomScale, zoomOffset: this.view.zoomOffset });
+		if (history.length > ZOOM_HISTORY_LIMIT) history.shift();
+		Object.assign(this.view, { zoomScale, zoomOffset });
+		this.applyZoomToEngine();
 	},
-	previousSweepRange(this: AppInstance) {
-		const previous = this.sweep.rangeHistory.pop();
-		if (previous) Object.assign(this.sweep, previous);
+	previousSweepZoom(this: AppInstance) {
+		const previous = this.sweep.zoomHistory.pop();
+		if (!previous) return;
+		Object.assign(this.view, previous);
+		this.applyZoomToEngine();
 	},
 	/** "R5" when a peak sits within 3 MHz of a channel of the selected band. */
 	peakChannel(this: AppInstance, freqMHz: number) {
@@ -84,6 +91,7 @@ export const sweepMethods = {
 		this.sweep.active = true;
 		this.sweep.rate = 0;
 		resetSweepTraces(this);
+		this.sweep.zoomHistory = [];
 		this.view.zoomScale = 1.0;
 		this.view.zoomOffset = 0.0;
 		this.initCanvas();
@@ -109,7 +117,9 @@ export const sweepMethods = {
 	},
 };
 
-const RANGE_HISTORY_LIMIT = 20;
+const ZOOM_HISTORY_LIMIT = 20;
+/** Same limit as the mouse wheel. */
+const MAX_ZOOM = 100;
 
 function sweepRequest(app: AppInstance) {
 	return { startMHz: app.sweep.startMHz, stopMHz: app.sweep.stopMHz, binWidthHz: app.sweep.binWidthKHz * 1e3 };

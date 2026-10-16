@@ -44,7 +44,7 @@ export function drawSweepOverlays(app: AppInstance, ctx: CanvasRenderingContext2
 	ctx.restore();
 }
 
-/** The range being dragged out, shaded, with the span the sweep will switch to on release. */
+/** The range being dragged out, shaded, with the span the display will zoom to on release. */
 function drawSelection(
 	ctx: CanvasRenderingContext2D,
 	selection: { fromMHz: number; toMHz: number },

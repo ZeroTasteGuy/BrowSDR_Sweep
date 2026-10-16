@@ -102,8 +102,8 @@
 								<option v-for="preset in sweepPresets()" :key="preset.id" :value="preset.id">{{ preset.label }}</option>
 							</UiSelect>
 						</UiFormRow>
-						<UiFormRow v-if="sweep.rangeHistory.length">
-							<UiButton variant="secondary" style="width: 100%;" @click="previousSweepRange" title="Go back to the range before your last drag-select">Previous range</UiButton>
+						<UiFormRow v-if="sweep.zoomHistory.length">
+							<UiButton variant="secondary" style="width: 100%;" @click="previousSweepZoom" title="Go back to the zoom before your last drag-select">Previous zoom</UiButton>
 						</UiFormRow>
 						<UiFormRow label="Start">
 							<UiInputGroup unit="MHz"><UiInput type="number" v-model.lazy.number="sweep.startMHz" step="1" min="0" title="Sweep start (whole MHz). Applies when you press Enter or leave the field."></UiInput></UiInputGroup>
@@ -139,7 +139,7 @@
 						</ol>
 						<p v-if="sweepError()" class="sweep-note sweep-error" role="alert">{{ sweepError() }}</p>
 						<p v-if="sweep.plan" class="sweep-note" role="status">{{ sweep.plan.startMHz }}&ndash;{{ sweep.plan.stopMHz }} MHz &middot; {{ (sweep.plan.binWidthHz / 1000).toFixed(2) }} kHz bins<template v-if="running"> &middot; {{ sweep.rate.toFixed(1) }} sweeps/s</template></p>
-						<p class="sweep-note">Drag across the spectrum to sweep just that part.</p>
+						<p class="sweep-note">Drag across the spectrum to zoom in on that part. The sweep range stays the same.</p>
 						<p class="sweep-note">Gain uses the LNA, VGA and Amp controls below. Levels are relative, not calibrated.</p>
 					</template>
 				</UiPanel>
