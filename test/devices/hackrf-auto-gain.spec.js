@@ -391,6 +391,29 @@ describe('continuous auto gain', () => {
 		app.autoGain.enabled = false;
 		await vi.advanceTimersByTimeAsync(1000);
 	});
+	it('cuts once for a burst, then climbs back in small steps to just under the gain that overloaded', async () => {
+		const app = loopApp(() => level(-40, -20));
+		app.gains.VGA = 30;
+		let burst = true;
+		app.backend.getRxLevel.mockImplementation(() =>
+			burst ? { ...level(-12, -1, 0.01), started: Date.now() } : { ...level(-40, -20), started: Date.now() },
+		);
+		void app.runAutoGainLoop();
+		await vi.advanceTimersByTimeAsync(1500);
+		// One 6 dB cut, not a slide to 0 while the burst lasts.
+		expect(app.gains.LNA + app.gains.VGA).toBe(40);
+		burst = false;
+		const totals = [];
+		for (let second = 0; second < 15; second++) {
+			await vi.advanceTimersByTimeAsync(1000);
+			totals.push(app.gains.LNA + app.gains.VGA);
+		}
+		for (let i = 1; i < totals.length; i++) expect(totals[i] - totals[i - 1]).toBeLessThanOrEqual(2);
+		expect(totals.at(-1)).toBe(44);
+		expect(app.autoGain.status).toContain('Holding below the last overload');
+		app.autoGain.enabled = false;
+		await vi.advanceTimersByTimeAsync(1000);
+	});
 	it('drops gain at once and flags overload', async () => {
 		const app = loopApp(() => ({ ...level(-12, -1, 0.01), started: Date.now() }));
 		void app.runAutoGainLoop();

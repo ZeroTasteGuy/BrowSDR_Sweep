@@ -4,8 +4,9 @@ import type { GainDecision } from './types';
  * Decides when a continuous auto gain loop may act on a proposed gain change,
  * so a strong, bursty signal does not set the gain hunting up and down.
  *
- * - Overload acts at once, and the gain that overloaded becomes a ceiling
- *   that is not climbed back to for a while.
+ * - Overload cuts once, and the gain that overloaded becomes a ceiling that
+ *   is not climbed back past for a while. Further overload readings during
+ *   the same burst are ignored, so one burst cannot walk the gain down to 0.
  * - Raising gain needs several readings in a row asking for it.
  * - Lowering gain for headroom (without overload) needs two in a row.
  */
@@ -16,7 +17,9 @@ const LOWER_READINGS = 2;
 const CEILING_HOLD_MS = 60_000;
 const CEILING_HOLD_MAX_MS = 600_000;
 /** Stay this far below the gain that last overloaded. */
-const CEILING_MARGIN_DB = 4;
+const CEILING_MARGIN_DB = 2;
+/** After an overload cut, let the burst pass before reacting to overload again. */
+const OVERLOAD_COOLDOWN_MS = 2_000;
 
 export function createGainGovernor() {
 	let raise = 0;
@@ -24,15 +27,18 @@ export function createGainGovernor() {
 	let ceiling = Infinity;
 	let ceilingUntil = 0;
 	let hold = CEILING_HOLD_MS;
+	let cooldownUntil = 0;
 	return {
 		decide(current: number, proposed: number, overloaded: boolean, now = Date.now()): GainDecision {
 			if (now >= ceilingUntil) ceiling = Infinity;
 			if (overloaded) {
+				raise = lower = 0;
+				if (now < cooldownUntil) return { act: false, held: 'Waiting for the overload burst to pass' };
 				// Overloading again after a ceiling expired: the signal is still there, so hold longer.
 				if (ceiling === Infinity && ceilingUntil) hold = Math.min(CEILING_HOLD_MAX_MS, hold * 2);
-				ceiling = Math.min(ceiling, current - CEILING_MARGIN_DB);
+				ceiling = current - CEILING_MARGIN_DB;
 				ceilingUntil = now + hold;
-				raise = lower = 0;
+				cooldownUntil = now + OVERLOAD_COOLDOWN_MS;
 				return { act: true };
 			}
 			if (proposed > current) {
@@ -52,6 +58,7 @@ export function createGainGovernor() {
 			raise = lower = 0;
 			ceiling = Infinity;
 			ceilingUntil = 0;
+			cooldownUntil = 0;
 			hold = CEILING_HOLD_MS;
 		},
 	};

@@ -9,7 +9,7 @@ import type { AutoGainPreset, GainStep } from './types';
 
 const autoGainPresets: AutoGainPreset[] = [
 	{ id: 'race', label: 'Race', description: 'Near quads: extra headroom, RF amp off', target: 80, allowAmp: false },
-	{ id: 'scan', label: 'Scan', description: 'Far or quiet signals: more gain, RF amp allowed', target: 20, allowAmp: true },
+	{ id: 'scan', label: 'Scan', description: 'Far or quiet signals: more gain, RF amp off', target: 20, allowAmp: false },
 	{ id: 'manual', label: 'Manual', description: 'Auto gain off; set the gains yourself' },
 ];
 

@@ -20,7 +20,7 @@ it('switches auto gain with the toggle and presets, and sets the target and amp 
 	await preset('Race').trigger('click');
 	expect(wrapper.vm.autoGain).toMatchObject({ enabled: true, target: 80, allowAmp: false });
 	await preset('Scan').trigger('click');
-	expect(wrapper.vm.autoGain).toMatchObject({ enabled: true, target: 20, allowAmp: true });
+	expect(wrapper.vm.autoGain).toMatchObject({ enabled: true, target: 20, allowAmp: false });
 	expect(preset('Scan').classes()).toContain('active');
 	await preset('Manual').trigger('click');
 	expect(wrapper.vm.autoGain.enabled).toBe(false);
