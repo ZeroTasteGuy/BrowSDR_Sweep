@@ -28,8 +28,10 @@ export interface SweepStreamOpts extends SweepRequest {
 	gains?: Record<string, number>;
 }
 
-/** Offset tuning applied to spectrum frames: bins to shift back, and the DC remover. */
+/** Offset tuning applied to spectrum frames: bins to shift back, DC removal and spike patching. */
 export interface SpectrumOffset {
 	bins: number;
 	dc: DcOffsetRemover | null;
+	/** Most bins either side of the DC bin to patch over. */
+	spikeHalfWidth: number;
 }
