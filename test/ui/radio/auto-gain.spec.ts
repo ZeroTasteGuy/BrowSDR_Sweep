@@ -11,7 +11,6 @@ it('runs Balanced from the main button and selected preferences from the disclos
 		gains: { LNA: 16, VGA: 16, 'Amp (14dB)': 0 },
 		connected: true,
 		running: true,
-		sweep: { ...wrapper.vm.sweep, enabled: false },
 	});
 	const actions = wrapper.get('.auto-gain');
 	await actions.get('.ui-menu-split > button').trigger('click');

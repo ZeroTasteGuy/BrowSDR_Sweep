@@ -125,7 +125,7 @@ export function createAppData() {
 
 function createSweepState() {
 	return {
-		enabled: true,
+		enabled: false,
 		active: false,
 		startMHz: 5540,
 		stopMHz: 5960,

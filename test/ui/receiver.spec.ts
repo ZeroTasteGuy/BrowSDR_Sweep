@@ -64,14 +64,14 @@ describe('receiver uses the shared UI', () => {
 		expect(wrapper.text()).not.toContain('Shared VFO DSP');
 		expect(wrapper.get('.vfo-displays').text()).toBe('5800 MHz');
 	});
-	it('starts in sweep mode on IMD8C, and moves older saved sweep choices to the new defaults once', () => {
+	it('defaults sweep to the 5.8 GHz FPV range on IMD8C, and moves older saved sweep choices to the new defaults once', () => {
 		const storage = new Map<string, string>();
 		vi.stubGlobal('localStorage', {
 			getItem: (key: string) => storage.get(key) ?? null,
 			setItem: (key: string, value: string) => storage.set(key, value),
 		});
 		wrapper = mount(ReceiverView);
-		expect(wrapper.vm.sweep).toMatchObject({ enabled: true, startMHz: 5540, stopMHz: 5960, channelBand: 'IMD8C' });
+		expect(wrapper.vm.sweep).toMatchObject({ enabled: false, startMHz: 5540, stopMHz: 5960, channelBand: 'IMD8C' });
 		const old = { startMHz: 5300, stopMHz: 6000, channelBand: 'R', peakMarkers: false };
 		storage.set('SDRSetting', JSON.stringify({ sweep: old }));
 		settingsMethods.loadSetting.call(wrapper.vm as unknown as AppInstance);
