@@ -228,6 +228,38 @@ canvas {
 	transform: translateX(-100%);
 }
 
+/* Drag-to-zoom range in sweep mode, over both the spectrum and the waterfall */
+.sweep-selection {
+	position: absolute;
+	top: 0;
+	bottom: 0;
+	background: rgba(0, 255, 234, 0.12);
+	border-left: 1px solid rgba(0, 255, 234, 0.9);
+	border-right: 1px solid rgba(0, 255, 234, 0.9);
+	pointer-events: none;
+	z-index: 2;
+}
+.sweep-selection[hidden] {
+	display: none;
+}
+.sweep-selection-label {
+	position: absolute;
+	top: 40px;
+	left: 50%;
+	transform: translateX(-50%);
+	background: rgba(0, 0, 0, 0.85);
+	border: 1px solid #00ffea;
+	border-radius: 4px;
+	padding: 4px 8px;
+	font-family: 'Roboto Mono', monospace;
+	font-size: 14px;
+	font-weight: 600;
+	line-height: 1.3;
+	text-align: center;
+	white-space: pre;
+	color: #fff;
+}
+
 .hover-tick {
 	position: absolute;
 	top: 10px;

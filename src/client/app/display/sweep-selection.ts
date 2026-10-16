@@ -22,24 +22,24 @@ export function createSweepSelection(app: AppInstance): SweepSelection {
 		startX = clientX;
 		const freqMHz = freqAt(e, clientX);
 		app._sweepSelection = { fromMHz: freqMHz, toMHz: freqMHz };
+		showSelection(app);
 	};
 	const move = (e: MouseEvent | TouchEvent, clientX: number) => {
 		if (!app._sweepSelection) return;
 		app._sweepSelection.toMHz = Math.max(app.minFreq, Math.min(app.maxFreq, freqAt(e, clientX)));
-		repaintSpectrum(app);
+		showSelection(app);
 	};
 	const finish = (endX: number | null) => {
 		const selection = app._sweepSelection;
 		selecting = false;
 		app._sweepSelection = undefined;
+		showSelection(app);
 		if (selection && endX !== null && Math.abs(endX - startX) >= MIN_SELECTION_PX) app.zoomToSweepRange(selection.fromMHz, selection.toMHz);
-		repaintSpectrum(app);
 	};
 	return {
 		mouseDown(e: MouseEvent) {
 			if (e.button !== 0 || app.view.locked || !app.sweep.active) return false;
 			begin(e, e.clientX);
-			repaintSpectrum(app);
 			return true;
 		},
 		mouseMove(e: MouseEvent) {
@@ -77,10 +77,20 @@ export function createSweepSelection(app: AppInstance): SweepSelection {
 	};
 }
 
-/** Live frames redraw the selection anyway; while stopped, redraw the last frame so the drag still shows. */
-function repaintSpectrum(app: AppInstance) {
-	if (app.running || !app._lastSpectrumData || !app._fftCtx) return;
-	app._zoomRepaint = true;
-	app.drawSpectrum(app._lastSpectrumData);
-	app._zoomRepaint = false;
+/** Shade the dragged range across the spectrum and waterfall, labelled with its edges and width. */
+function showSelection(app: AppInstance) {
+	const overlay = app.$refs.sweepSelection as HTMLElement | undefined;
+	if (!overlay) return;
+	const selection = app._sweepSelection;
+	overlay.hidden = !selection;
+	if (!selection) return;
+	const startMHz = Math.min(selection.fromMHz, selection.toMHz);
+	const stopMHz = Math.max(selection.fromMHz, selection.toMHz);
+	const viewMHz = app.maxFreq - app.minFreq;
+	overlay.style.left = `${((startMHz - app.minFreq) / viewMHz) * 100}%`;
+	overlay.style.width = `${((stopMHz - startMHz) / viewMHz) * 100}%`;
+	const spanMHz = stopMHz - startMHz;
+	const decimals = spanMHz < 2 ? 2 : spanMHz < 20 ? 1 : 0;
+	const label = overlay.firstElementChild as HTMLElement;
+	label.textContent = `${startMHz.toFixed(decimals)} \u2013 ${stopMHz.toFixed(decimals)} MHz\n${spanMHz.toFixed(decimals)} MHz wide`;
 }

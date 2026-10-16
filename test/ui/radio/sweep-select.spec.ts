@@ -8,8 +8,12 @@ function mountSweepCanvas(view = { zoomScale: 1, zoomOffset: 0, locked: false })
 		fft: document.createElement('canvas'),
 		waterfall: document.createElement('canvas'),
 		hoverTick: document.createElement('div'),
+		sweepSelection: document.createElement('div'),
 	};
+	refs.sweepSelection.hidden = true;
+	refs.sweepSelection.append(document.createElement('span'));
 	vi.spyOn(refs.fft, 'getBoundingClientRect').mockReturnValue({ left: 0, width: 1000 } as DOMRect);
+	vi.spyOn(refs.waterfall, 'getBoundingClientRect').mockReturnValue({ left: 0, width: 1000 } as DOMRect);
 	const app = {
 		$refs: refs,
 		workspace: {},
@@ -37,7 +41,7 @@ function mountSweepCanvas(view = { zoomScale: 1, zoomOffset: 0, locked: false })
 		},
 	};
 	mountCanvas.call(app as unknown as AppInstance);
-	return { app, canvas: refs.fft };
+	return { app, canvas: refs.fft, waterfall: refs.waterfall, overlay: refs.sweepSelection };
 }
 
 const touchEvent = (type: string, points: Array<{ clientX: number; clientY: number }>, changed = points) =>
@@ -61,6 +65,24 @@ describe('sweep drag-to-select', () => {
 			sweepMethods.previousSweepZoom.call(app as unknown as AppInstance);
 			expect(app.view).toMatchObject({ zoomScale: 1, zoomOffset: 0 });
 			expect(app.sweep.zoomHistory).toEqual([]);
+		} finally {
+			app._canvasCleanup();
+		}
+	});
+
+	it('zooms from a drag on the waterfall and shades the range over both views with a readable label', () => {
+		const { app, waterfall, overlay } = mountSweepCanvas();
+		try {
+			waterfall.dispatchEvent(new MouseEvent('mousedown', { button: 0, clientX: 500 }));
+			waterfall.dispatchEvent(new MouseEvent('mousemove', { clientX: 510 }));
+			expect(overlay.hidden).toBe(false);
+			expect(overlay.style.left).toBe('50%');
+			expect(overlay.style.width).toBe('1%');
+			expect(overlay.textContent).toBe('5800.0 \u2013 5804.0 MHz\n4.0 MHz wide');
+			waterfall.dispatchEvent(new MouseEvent('mouseup', { button: 0, clientX: 510 }));
+			expect(overlay.hidden).toBe(true);
+			expect(app.view.zoomScale).toBeCloseTo(100);
+			expect(app.sweep).toMatchObject({ startMHz: 5600, stopMHz: 6000 });
 		} finally {
 			app._canvasCleanup();
 		}

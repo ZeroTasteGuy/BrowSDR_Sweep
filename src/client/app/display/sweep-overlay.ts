@@ -6,8 +6,6 @@ import type { ContrastRange } from '@/display/contrast.types';
 const ANALYSIS_INTERVAL_MS = 500;
 const PEAK_COUNT = 5;
 const CHANNEL_COLOR = 'rgba(255, 170, 60, 0.75)';
-const SELECTION_FILL = 'rgba(0, 255, 234, 0.15)';
-const SELECTION_EDGE = 'rgba(0, 255, 234, 0.8)';
 
 /** Per-frame sweep bookkeeping: max-hold, the cross-sweep average and, twice a second, the strongest peaks. */
 export function trackSweepFrame(app: AppInstance, data: Float32Array) {
@@ -40,30 +38,7 @@ export function drawSweepOverlays(app: AppInstance, ctx: CanvasRenderingContext2
 	drawChannels(app, ctx, x, w, h);
 	if (app._sweepPeak) drawPeakHold(app, ctx, app._sweepPeak, w, y);
 	drawPeakMarkers(app, ctx, x, y);
-	if (app._sweepSelection) drawSelection(ctx, app._sweepSelection, x, h);
 	ctx.restore();
-}
-
-/** The range being dragged out, shaded, with the span the display will zoom to on release. */
-function drawSelection(
-	ctx: CanvasRenderingContext2D,
-	selection: { fromMHz: number; toMHz: number },
-	x: (freqMHz: number) => number,
-	h: number,
-) {
-	const startMHz = Math.min(selection.fromMHz, selection.toMHz);
-	const stopMHz = Math.max(selection.fromMHz, selection.toMHz);
-	const left = x(startMHz);
-	const right = x(stopMHz);
-	ctx.fillStyle = SELECTION_FILL;
-	ctx.fillRect(left, 0, right - left, h);
-	ctx.strokeStyle = SELECTION_EDGE;
-	ctx.lineWidth = 1;
-	ctx.strokeRect(left + 0.5, 0.5, Math.max(0, right - left - 1), h - 1);
-	ctx.fillStyle = SELECTION_EDGE;
-	ctx.textAlign = 'center';
-	ctx.fillText(`${Math.floor(startMHz)}\u2013${Math.ceil(stopMHz)} MHz`, (left + right) / 2, 24);
-	ctx.textAlign = 'left';
 }
 
 /** Channel centres as labelled dashed lines. */
