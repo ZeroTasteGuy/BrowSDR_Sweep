@@ -441,6 +441,8 @@ canvas {
 	line-height: 1.6;
 	color: #00ffea;
 	font-family: 'Roboto Mono', monospace;
+	font-variant-numeric: tabular-nums;
+	white-space: nowrap;
 }
 .sweep-error {
 	color: var(--accent-red, #ff5555);

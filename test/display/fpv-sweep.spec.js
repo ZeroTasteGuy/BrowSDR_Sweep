@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { averageSweep, findPeaks, FPV_BANDS, noiseFloor, SWEEP_PRESETS } from '@/display/fpv';
+import { averageSweep, channelLabel, findPeaks, FPV_BANDS, noiseFloor, SWEEP_PRESETS } from '@/display/fpv';
 import { planSweep } from '@/devices/hackrf/sweep';
 import { drawSweepOverlays, maxHold } from '@/app/display/sweep-overlay';
 import { sweepMethods } from '@/app/radio/sweep';
@@ -20,14 +20,18 @@ describe('sweep presets and FPV channels', () => {
 		}
 	});
 
-	it('has eight channels per band, all inside the 5.8 GHz FPV preset', () => {
+	it('keeps every band inside the 5.8 GHz FPV preset, with a name for each mixed-set channel', () => {
 		const fpv = SWEEP_PRESETS.find((preset) => preset.id === 'fpv-5g8');
 		for (const band of FPV_BANDS) {
-			expect(band.channels).toHaveLength(8);
+			expect(band.channels).toHaveLength(band.id === 'IMD6C' ? 6 : 8);
+			if (band.labels) expect(band.labels).toHaveLength(band.channels.length);
 			for (const channel of band.channels) expect(channel > fpv.startMHz && channel < fpv.stopMHz).toBe(true);
 		}
 		expect(FPV_BANDS.find((band) => band.id === 'R').channels[0]).toBe(5658);
 		expect(FPV_BANDS.find((band) => band.id === 'F').channels[3]).toBe(5800);
+		const imd8 = FPV_BANDS.find((band) => band.id === 'IMD8C');
+		expect(imd8.channels.map((_, index) => channelLabel(imd8, index))).toEqual(['L6', 'L7', 'R1', 'R2', 'F2', 'F4', 'R7', 'R8']);
+		expect(channelLabel(FPV_BANDS[0], 4)).toBe('R5');
 	});
 });
 
@@ -94,6 +98,9 @@ describe('sweep panel helpers', () => {
 		const receiver = app();
 		expect(sweepMethods.peakChannel.call(receiver, 5805.2)).toBe('R5');
 		expect(sweepMethods.peakChannel.call(receiver, 5820)).toBe('');
+		receiver.sweep.channelBand = 'IMD8C';
+		expect(sweepMethods.peakChannel.call(receiver, 5585)).toBe('L7');
+		expect(sweepMethods.peakChannel.call(receiver, 5806)).toBe('');
 		receiver.sweep.channelBand = '';
 		expect(sweepMethods.peakChannel.call(receiver, 5806)).toBe('');
 	});

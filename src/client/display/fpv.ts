@@ -4,7 +4,7 @@ import type { FpvBand, SweepAxis, SweepPeak, SweepPreset } from './types';
 
 /** Ranges are whole 20 MHz sweep steps, so they sweep exactly as entered. */
 export const SWEEP_PRESETS: SweepPreset[] = [
-	{ id: 'fpv-5g8', label: '5.8 GHz FPV (5640–5960)', startMHz: 5640, stopMHz: 5960 },
+	{ id: 'fpv-5g8', label: '5.8 GHz FPV (5540–5960)', startMHz: 5540, stopMHz: 5960 },
 	{ id: 'wide-5g8', label: '5.8 GHz wide (5300–6000)', startMHz: 5300, stopMHz: 6000 },
 	{ id: '2g4', label: '2.4 GHz (2400–2500)', startMHz: 2400, stopMHz: 2500 },
 	{ id: 'sub-ghz', label: '868 / 915 MHz control (860–940)', startMHz: 860, stopMHz: 940 },
@@ -24,7 +24,20 @@ export const FPV_BANDS: FpvBand[] = [
 	{ id: 'A', name: 'Band A', channels: [5865, 5845, 5825, 5805, 5785, 5765, 5745, 5725] },
 	{ id: 'B', name: 'Band B', channels: [5733, 5752, 5771, 5790, 5809, 5828, 5847, 5866] },
 	{ id: 'E', name: 'Band E', channels: [5705, 5685, 5665, 5645, 5885, 5905, 5925, 5945] },
+	// Race sets spaced to keep intermodulation off each other's channels.
+	{ id: 'IMD6C', name: 'IMD6C', channels: [5658, 5695, 5760, 5800, 5880, 5917], labels: ['R1', 'R2', 'F2', 'F4', 'R7', 'R8'] },
+	{
+		id: 'IMD8C',
+		name: 'IMD8C (IMD6C + L6, L7)',
+		channels: [5547, 5584, 5658, 5695, 5760, 5800, 5880, 5917],
+		labels: ['L6', 'L7', 'R1', 'R2', 'F2', 'F4', 'R7', 'R8'],
+	},
 ];
+
+/** A channel's display name: "R5" for band channels, or its own name in mixed sets. */
+export function channelLabel(band: FpvBand, index: number): string {
+	return band.labels?.[index] ?? `${band.id}${index + 1}`;
+}
 
 const binMHz = (axis: SweepAxis) => axis.binWidthHz / 1e6;
 

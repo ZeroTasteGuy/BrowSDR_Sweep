@@ -1,5 +1,5 @@
 import type { AppInstance } from '@/app/core/receiver.types';
-import { averageSweep, findPeaks, FPV_BANDS } from '@/display/fpv';
+import { averageSweep, channelLabel, findPeaks, FPV_BANDS } from '@/display/fpv';
 import type { ContrastRange } from '@/display/contrast.types';
 
 /** Peaks are recomputed at this rate; the overlay itself redraws every frame. */
@@ -56,7 +56,7 @@ function drawChannels(app: AppInstance, ctx: CanvasRenderingContext2D, x: (freqM
 		ctx.stroke();
 		ctx.fillStyle = CHANNEL_COLOR;
 		ctx.textAlign = 'center';
-		ctx.fillText(`${band.id}${index + 1}`, px, 10);
+		ctx.fillText(channelLabel(band, index), px, 10);
 	});
 	ctx.setLineDash([]);
 	ctx.textAlign = 'left';

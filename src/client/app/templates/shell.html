@@ -131,8 +131,8 @@
 						<UiFormRow>
 							<UiCheckbox variant="native" v-model="sweep.peakMarkers" label="Peak markers" style="flex:1"></UiCheckbox>
 						</UiFormRow>
-						<ol v-if="sweep.peakMarkers && sweep.peaks.length" class="sweep-peaks" aria-label="Strongest peaks">
-							<li v-for="peak in sweep.peaks" :key="peak.freqMHz">{{ peak.freqMHz.toFixed(2) }} MHz<template v-if="peakChannel(peak.freqMHz)"> &middot; {{ peakChannel(peak.freqMHz) }}</template></li>
+						<ol v-if="sweep.peakMarkers" class="sweep-peaks" aria-label="Strongest peaks">
+							<li v-for="slot in 5" :key="slot"><template v-if="sweep.peaks[slot - 1]">{{ sweep.peaks[slot - 1].freqMHz.toFixed(2) }} MHz<template v-if="peakChannel(sweep.peaks[slot - 1].freqMHz)"> &middot; {{ peakChannel(sweep.peaks[slot - 1].freqMHz) }}</template></template><template v-else>&ndash;</template></li>
 						</ol>
 						<p v-if="sweepError()" class="sweep-note sweep-error" role="alert">{{ sweepError() }}</p>
 						<p v-if="sweep.plan" class="sweep-note" role="status">{{ sweep.plan.startMHz }}&ndash;{{ sweep.plan.stopMHz }} MHz &middot; {{ (sweep.plan.binWidthHz / 1000).toFixed(2) }} kHz bins<template v-if="running"> &middot; {{ sweep.rate.toFixed(1) }} sweeps/s</template></p>

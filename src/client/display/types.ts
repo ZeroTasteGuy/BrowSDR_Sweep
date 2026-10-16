@@ -20,8 +20,10 @@ export interface SweepPreset {
 export interface FpvBand {
 	id: string;
 	name: string;
-	/** Channel 1–8 centre frequencies in MHz. */
+	/** Channel centre frequencies in MHz. */
 	channels: number[];
+	/** Channel names, when they aren't simply the band id and channel number (as in mixed sets like IMD6C). */
+	labels?: string[];
 }
 
 export interface SweepAxis {

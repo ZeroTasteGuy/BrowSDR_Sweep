@@ -3,7 +3,7 @@ import type { AppInstance } from '@/app/core/receiver.types';
 import { planSweep, SWEEP_BIN_WIDTHS_HZ } from '@/devices/hackrf/sweep';
 import { errorMessage } from '@/platform/errors';
 import { resetSweepTraces } from '@/app/display/sweep-overlay';
-import { FPV_BANDS, PEAK_FADE_OPTIONS, SWEEP_PRESETS } from '@/display/fpv';
+import { channelLabel, FPV_BANDS, PEAK_FADE_OPTIONS, SWEEP_PRESETS } from '@/display/fpv';
 
 export const sweepMethods = {
 	peakFadeOptions() {
@@ -31,7 +31,7 @@ export const sweepMethods = {
 	peakChannel(this: AppInstance, freqMHz: number) {
 		const band = FPV_BANDS.find((candidate) => candidate.id === this.sweep.channelBand);
 		const index = band?.channels.findIndex((channel) => Math.abs(channel - freqMHz) <= 3) ?? -1;
-		return band && index >= 0 ? `${band.id}${index + 1}` : '';
+		return band && index >= 0 ? channelLabel(band, index) : '';
 	},
 	/** Bin width choices for the dropdown, in kHz. */
 	sweepBinWidthOptions() {
