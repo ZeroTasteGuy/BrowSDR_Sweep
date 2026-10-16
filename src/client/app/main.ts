@@ -302,9 +302,10 @@ function watchSweepSettings(this: AppInstance) {
 		},
 	);
 	this.$watch(
-		() => this.sweep.peakHold,
+		() => [this.sweep.peakHold, this.sweep.peakFade, this.sweep.peakMarkers, this.sweep.channelBand],
 		() => {
 			this._sweepPeak = undefined;
+			if (!this.sweep.peakMarkers) this.sweep.peaks = [];
 			this.saveSetting();
 		},
 	);

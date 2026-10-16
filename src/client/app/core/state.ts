@@ -20,6 +20,7 @@ import type { CapabilityIssue } from '@/platform/types';
 import type { Rtl433Status, Rtl433Protocol } from '@/worker/decoders/types';
 import { DEFAULT_FFT_SIZE, DEFAULT_SPECTRUM_RANGE } from '@/display/spectrum-range';
 import type { SweepPlan } from '@/devices/hackrf/types';
+import type { SweepPeak } from '@/display/types';
 
 export function createAppData() {
 	return {
@@ -130,8 +131,15 @@ function createSweepState() {
 		stopMHz: 6000,
 		binWidthKHz: 78.125,
 		peakHold: true,
+		/** Let held peaks fall back slowly instead of holding forever. */
+		peakFade: false,
+		/** Number the strongest peaks on the spectrum. */
+		peakMarkers: true,
+		/** FPV band whose channel centres are drawn; '' for none. */
+		channelBand: 'R',
 		rate: 0,
 		plan: null as SweepPlan | null,
+		peaks: [] as SweepPeak[],
 	};
 }
 

@@ -5,6 +5,7 @@ import { DEFAULT_FFT_SIZE, normalizedSpectrumRange, SPECTRUM_RANGE_VERSION } fro
 import { isRecord, restoreFields, primitiveMap } from '@/platform/data';
 import { validContrastRange } from '@/display/contrast';
 import { normalizedSweepRange } from './sweep';
+import { FPV_BANDS } from '@/display/fpv';
 
 export const settingsMethods = {
 	saveSetting(this: AppInstance) {
@@ -135,12 +136,23 @@ function restoreVfoSettings(this: AppInstance, setting: Record<string, unknown>)
 }
 
 function savedSweepSettings(sweep: AppInstance['sweep'] | undefined) {
-	return sweep && { startMHz: sweep.startMHz, stopMHz: sweep.stopMHz, binWidthKHz: sweep.binWidthKHz, peakHold: sweep.peakHold };
+	return (
+		sweep && {
+			startMHz: sweep.startMHz,
+			stopMHz: sweep.stopMHz,
+			binWidthKHz: sweep.binWidthKHz,
+			peakHold: sweep.peakHold,
+			peakFade: sweep.peakFade,
+			peakMarkers: sweep.peakMarkers,
+			channelBand: sweep.channelBand,
+		}
+	);
 }
 
 function restoreSweepSettings(this: AppInstance, saved: unknown) {
 	const fields = savedSweepSettings(this.sweep);
 	if (!fields) return;
 	restoreFields(fields, saved);
+	if (fields.channelBand && !FPV_BANDS.some((band) => band.id === fields.channelBand)) fields.channelBand = this.sweep.channelBand;
 	Object.assign(this.sweep, fields, normalizedSweepRange(fields));
 }

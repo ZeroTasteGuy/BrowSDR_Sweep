@@ -3,7 +3,16 @@ import { beforeAll, describe, expect, it, vi } from 'vitest';
 import { FFT, initSync } from '/wasm/dsp/browsdr_dsp.js';
 import { HackRF } from '@/devices/hackrf/usb';
 import { HackRFDevice } from '@/devices/hackrf/device';
-import { SWEEP_BIN_WIDTHS_HZ, SWEEP_BLOCK_BYTES, SweepAssembler, parseSweepBlocks, planSweep, sweepWindow } from '@/devices/hackrf/sweep';
+import {
+	SWEEP_BIN_WIDTHS_HZ,
+	SWEEP_BLOCK_BYTES,
+	SweepAssembler,
+	parseSweepBlocks,
+	planSweep,
+	sweepBlockSamples,
+	sweepWindow,
+} from '@/devices/hackrf/sweep';
+import { HackRFRxLevel } from '@/devices/hackrf/rx-level';
 import { normalizedSweepRange } from '@/app/radio/sweep';
 
 beforeAll(() => {
@@ -98,6 +107,22 @@ describe('sweep block parsing', () => {
 		padded.set(block(1_000_000_000, 16), 100);
 		const blocks = parseSweepBlocks(padded.subarray(100), 16);
 		expect(blocks.map((b) => b.frequencyHz)).toEqual([1_000_000_000]);
+	});
+});
+
+describe('sweep level measurement', () => {
+	it('measures only block IQ, so headers never read as overload', () => {
+		const transfer = new Uint8Array(SWEEP_BLOCK_BYTES * 2);
+		transfer.set(block(5_300_000_000, 256), 0);
+		transfer.set(block(5_320_000_000, 256), SWEEP_BLOCK_BYTES);
+		const samples = sweepBlockSamples(transfer);
+		expect(samples.map((iq) => iq.length)).toEqual([SWEEP_BLOCK_BYTES - 16, SWEEP_BLOCK_BYTES - 16]);
+		const level = new HackRFRxLevel();
+		level.reset(1);
+		for (let pass = 0; pass < 8; pass++) for (const iq of samples) level.observe(iq, 1);
+		level.observe(samples[0], 300);
+		expect(level.level.clippedFraction).toBe(0);
+		expect(level.level.peakDbfs).toBeLessThan(-1);
 	});
 });
 

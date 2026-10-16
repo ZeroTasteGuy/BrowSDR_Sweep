@@ -1,4 +1,5 @@
 import type { AutoGainMode } from '@/radio/types';
+import type { FpvBand, SweepPreset } from '@/display/types';
 import type { UiMenuGroup } from '@/ui/menus/types';
 import type { BleMessage } from '@/worker/decoders/ble/types';
 import type { AisMessage } from '@/worker/decoders/ais/types';
@@ -54,6 +55,9 @@ export interface ReceiverInternals {
 	_remoteSpectrumLimiter: SpectrumFrameLimiter;
 	_lastSpectrumData?: Float32Array;
 	_sweepPeak?: Float32Array;
+	_sweepAverage?: Float32Array;
+	_sweepAnalysedAt?: number;
+	_sweepFrameAt?: number;
 	_zoomRepaint?: boolean;
 	_lastFrameTime: number;
 	_framesDrawn: number;
@@ -123,6 +127,12 @@ export interface ReceiverMethods {
 	sweepAvailable(): boolean;
 	sweepBinWidthOptions(): Array<{ value: number; label: string }>;
 	sweepError(): string;
+	sweepPresets(): SweepPreset[];
+	fpvBands(): FpvBand[];
+	sweepPresetId(): string;
+	applySweepPreset(id: string): void;
+	clearSweepPeaks(): void;
+	peakChannel(freqMHz: number): string;
 	initCanvas(): void;
 	resizeFftCanvas(): void;
 	drawSpectrum(data: Float32Array): void;

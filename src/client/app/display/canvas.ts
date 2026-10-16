@@ -6,6 +6,7 @@ import { SpectrumFrameLimiter, WaterfallClock } from '@/display/spectrum-rate';
 import { sidebandOffsetHz } from '@/worker/decoders/ssb';
 import { updateContrast } from './contrast';
 import { submitDiscovery, drawDiscovery } from '@/app/discovery/bridge';
+import { drawSweepOverlays, trackSweepFrame } from './sweep-overlay';
 
 export const canvasMethods = {
 	initCanvas(this: AppInstance) {
@@ -160,51 +161,19 @@ export const canvasMethods = {
 	},
 };
 
-/** Sweep mode shows the peak-hold trace instead of VFO and discovery markers. */
+/** Sweep mode shows its own overlays (channels, peak hold, peak markers) instead of VFO and discovery markers. */
 function drawOverlays(this: AppInstance, w: number, h: number, range: { minDB: number; maxDB: number }) {
 	if (this.sweep.active) {
-		if (this._sweepPeak) drawSweepPeak.call(this, this._sweepPeak, w, h, range);
+		drawSweepOverlays(this, this._fftCtx, w, h, range);
 		return;
 	}
 	if (this.showVfos) drawVfoHighlights.call(this, w, this._fftCtx, h);
 	drawDiscovery(this, this._fftCtx, w, h);
 }
 
-/** Max-hold across sweeps; reset when disabled or when the bin count changes (a new range). */
 function trackFrame(app: AppInstance, data: Float32Array) {
-	if (app.sweep.active) app._sweepPeak = updateSweepPeak(app._sweepPeak, data, app.sweep.peakHold);
+	if (app.sweep.active) trackSweepFrame(app, data);
 	else submitDiscovery(app, data);
-}
-
-function updateSweepPeak(peak: Float32Array | undefined, data: Float32Array, enabled: boolean): Float32Array | undefined {
-	if (!enabled) return undefined;
-	if (!peak || peak.length !== data.length) return data.slice();
-	for (let i = 0; i < data.length; i++) if (data[i] > peak[i]) peak[i] = data[i];
-	return peak;
-}
-
-function drawSweepPeak(this: AppInstance, peak: Float32Array, w: number, h: number, range: { minDB: number; maxDB: number }) {
-	const ctx = this._fftCtx;
-	const pointsToDraw = Math.floor(peak.length / this.view.zoomScale);
-	const startIdx = Math.floor(peak.length * this.view.zoomOffset);
-	const drawPoints = Math.min(w, pointsToDraw);
-	const factor = pointsToDraw / drawPoints;
-	ctx.save();
-	ctx.beginPath();
-	for (let i = 0; i < drawPoints; i++) {
-		const start = startIdx + Math.floor(i * factor);
-		const end = startIdx + Math.floor((i + 1) * factor);
-		let valDB = -1000;
-		for (let j = start; j < end && j < peak.length; j++) if (peak[j] > valDB) valDB = peak[j];
-		valDB = Math.max(range.minDB, Math.min(range.maxDB, valDB));
-		const y = h - (h * (valDB - range.minDB)) / (range.maxDB - range.minDB);
-		if (i === 0) ctx.moveTo(0, y);
-		else ctx.lineTo((i / drawPoints) * w, y);
-	}
-	ctx.strokeStyle = 'rgba(255, 235, 59, 0.9)';
-	ctx.lineWidth = 1;
-	ctx.stroke();
-	ctx.restore();
 }
 
 function drawVfoHighlights(this: AppInstance, w: number, ctx: CanvasRenderingContext2D, h: number) {

@@ -23,7 +23,14 @@ import { errorMessage } from '@/platform/errors';
 import type { SdrDevice, SdrDeviceInfo, GainControl } from '@/radio/types';
 import { registerDriver } from '@/radio/sdr-device';
 import { HackRFRxLevel } from './rx-level';
-import { SWEEP_BASEBAND_FILTER_HZ, SWEEP_BLOCK_BYTES, SWEEP_OFFSET_HZ, SWEEP_SAMPLE_RATE_HZ, SWEEP_TUNE_STEP_HZ } from './sweep';
+import {
+	SWEEP_BASEBAND_FILTER_HZ,
+	SWEEP_BLOCK_BYTES,
+	SWEEP_OFFSET_HZ,
+	SWEEP_SAMPLE_RATE_HZ,
+	SWEEP_TUNE_STEP_HZ,
+	sweepBlockSamples,
+} from './sweep';
 
 export class HackRFDevice implements SdrDevice {
 	readonly deviceType = 'hackrf';
@@ -128,23 +135,31 @@ export class HackRFDevice implements SdrDevice {
 		} catch (error) {
 			throw new Error(`Sweep needs HackRF firmware with USB API 1.04 or newer. ${errorMessage(error)}`, { cause: error });
 		}
-		await this.startStreaming(async (onData) => {
-			await this.hackrf.setSampleRateManual(SWEEP_SAMPLE_RATE_HZ, 1);
-			await this.hackrf.setBasebandFilterBandwidth(SWEEP_BASEBAND_FILTER_HZ);
-			await this.hackrf.initSweep(
-				[range.startMHz, range.stopMHz],
-				SWEEP_BLOCK_BYTES,
-				SWEEP_TUNE_STEP_HZ,
-				SWEEP_OFFSET_HZ,
-				HackRF.SWEEP_STYLE_INTERLEAVED,
-			);
-			await this.hackrf.startRxSweep(onData);
-		}, callback);
+		await this.startStreaming(
+			async (onData) => {
+				await this.hackrf.setSampleRateManual(SWEEP_SAMPLE_RATE_HZ, 1);
+				await this.hackrf.setBasebandFilterBandwidth(SWEEP_BASEBAND_FILTER_HZ);
+				await this.hackrf.initSweep(
+					[range.startMHz, range.stopMHz],
+					SWEEP_BLOCK_BYTES,
+					SWEEP_TUNE_STEP_HZ,
+					SWEEP_OFFSET_HZ,
+					HackRF.SWEEP_STYLE_INTERLEAVED,
+				);
+				await this.hackrf.startRxSweep(onData);
+			},
+			callback,
+			// Measure only the IQ of each block: the 0x7F 0x7F marker would read as a clipped sample.
+			(data) => {
+				for (const iq of sweepBlockSamples(data)) this.rxLevel.observe(iq);
+			},
+		);
 	}
 
 	private async startStreaming(
 		begin: (onData: (data: ArrayBufferView) => void) => Promise<void>,
 		callback: (data: ArrayBufferView) => void,
+		observe = (data: ArrayBufferView) => this.rxLevel.observe(data),
 	): Promise<void> {
 		this.rxLevel.reset();
 		let firstSample: () => void;
@@ -160,7 +175,7 @@ export class HackRFDevice implements SdrDevice {
 		started.catch(() => {});
 		try {
 			await begin((data) => {
-				this.rxLevel.observe(data);
+				observe(data);
 				callback(data);
 				firstSample();
 			});

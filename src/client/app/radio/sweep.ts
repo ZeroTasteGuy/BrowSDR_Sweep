@@ -2,8 +2,34 @@ import * as Comlink from 'comlink';
 import type { AppInstance } from '@/app/core/receiver.types';
 import { planSweep, SWEEP_BIN_WIDTHS_HZ } from '@/devices/hackrf/sweep';
 import { errorMessage } from '@/platform/errors';
+import { resetSweepTraces } from '@/app/display/sweep-overlay';
+import { FPV_BANDS, SWEEP_PRESETS } from '@/display/fpv';
 
 export const sweepMethods = {
+	sweepPresets() {
+		return SWEEP_PRESETS;
+	},
+	fpvBands() {
+		return FPV_BANDS;
+	},
+	/** The preset matching the current range, or '' when the range was entered by hand. */
+	sweepPresetId(this: AppInstance) {
+		return SWEEP_PRESETS.find((preset) => preset.startMHz === this.sweep.startMHz && preset.stopMHz === this.sweep.stopMHz)?.id ?? '';
+	},
+	applySweepPreset(this: AppInstance, id: string) {
+		const preset = SWEEP_PRESETS.find((candidate) => candidate.id === id);
+		if (preset) Object.assign(this.sweep, { startMHz: preset.startMHz, stopMHz: preset.stopMHz });
+	},
+	/** Start peak hold and the averaged peaks over, e.g. after moving a transmitter. */
+	clearSweepPeaks(this: AppInstance) {
+		resetSweepTraces(this);
+	},
+	/** "R5" when a peak sits within 3 MHz of a channel of the selected band. */
+	peakChannel(this: AppInstance, freqMHz: number) {
+		const band = FPV_BANDS.find((candidate) => candidate.id === this.sweep.channelBand);
+		const index = band?.channels.findIndex((channel) => Math.abs(channel - freqMHz) <= 3) ?? -1;
+		return band && index >= 0 ? `${band.id}${index + 1}` : '';
+	},
 	/** Bin width choices for the dropdown, in kHz. */
 	sweepBinWidthOptions() {
 		return SWEEP_BIN_WIDTHS_HZ.map((hz) => ({ value: hz / 1e3, label: `${formatKHz(hz / 1e3)} kHz` }));
@@ -36,7 +62,7 @@ export const sweepMethods = {
 		}
 		this.sweep.active = true;
 		this.sweep.rate = 0;
-		this._sweepPeak = undefined;
+		resetSweepTraces(this);
 		this.view.zoomScale = 1.0;
 		this.view.zoomOffset = 0.0;
 		this.initCanvas();

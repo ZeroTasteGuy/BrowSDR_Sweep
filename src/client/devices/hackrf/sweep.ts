@@ -61,6 +61,18 @@ export function parseSweepBlocks(data: ArrayBufferView, fftSize: number): SweepB
 	return blocks;
 }
 
+/** Bytes before the IQ in each block: the 10-byte header, rounded up to keep I/Q pairs aligned. */
+const SWEEP_HEADER_BYTES = 16;
+
+/** The IQ part of every sweep block in a transfer, without headers, for level measurement. */
+export function sweepBlockSamples(data: ArrayBufferView): Int8Array[] {
+	const samples: Int8Array[] = [];
+	for (let offset = 0; offset + SWEEP_BLOCK_BYTES <= data.byteLength; offset += SWEEP_BLOCK_BYTES) {
+		samples.push(new Int8Array(data.buffer, data.byteOffset + offset + SWEEP_HEADER_BYTES, SWEEP_BLOCK_BYTES - SWEEP_HEADER_BYTES));
+	}
+	return samples;
+}
+
 /** Hann window, as hackrf_sweep uses. */
 export function sweepWindow(fftSize: number): Float32Array {
 	return Float32Array.from({ length: fftSize }, (_, i) => 0.5 * (1 - Math.cos((2 * Math.PI * i) / (fftSize - 1))));
