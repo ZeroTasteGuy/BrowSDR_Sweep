@@ -1,5 +1,6 @@
 import type { VfoParams } from '@/worker/runtime/types';
 import type { SweepRequest } from '@/devices/hackrf/types';
+import type { DcOffsetRemover } from '@/radio/offset-tuning';
 
 export interface SharedBand {
 	centerBin: number;
@@ -25,4 +26,10 @@ export interface ChannelState {
 
 export interface SweepStreamOpts extends SweepRequest {
 	gains?: Record<string, number>;
+}
+
+/** Offset tuning applied to spectrum frames: bins to shift back, and the DC remover. */
+export interface SpectrumOffset {
+	bins: number;
+	dc: DcOffsetRemover | null;
 }
