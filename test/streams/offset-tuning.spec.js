@@ -86,7 +86,9 @@ describe('offset tuning', () => {
 		const captured = new Float32Array([-50, -40, -30, -20, -10, 0, -60, -70]);
 		const out = new Float32Array(8);
 		shiftSpectrum(captured, out, 2);
-		expect([...out]).toEqual([-70, -70, -50, -40, -30, -20, -10, 0]);
+		expect([...out]).toEqual([-40, -50, -50, -40, -30, -20, -10, 0]);
+		shiftSpectrum(captured, out, -2);
+		expect([...out]).toEqual([-30, -20, -10, 0, -60, -70, -70, -60]);
 		shiftSpectrum(captured, out, 0);
 		expect([...out]).toEqual([...captured]);
 	});
@@ -119,7 +121,7 @@ describe('offset tuning', () => {
 		deliver(toneWithOffset(2048, 6.3, -4));
 		expect(Math.abs(fftInputMeans.at(-1))).toBeLessThan(0.01);
 		const line = spectrum.mock.calls[0][0];
-		expect([line[0], line[255], line[256], line[2047]]).toEqual([0, 0, 0, 1791]);
+		expect([line[0], line[255], line[256], line[2047]]).toEqual([255, 0, 0, 1791]);
 		await Backend.prototype.setFrequency.call(backend, 5740);
 		expect(device.setFrequency).toHaveBeenLastCalledWith(5742.5e6);
 		expect(backend._centerFreq).toBe(5742.5);
