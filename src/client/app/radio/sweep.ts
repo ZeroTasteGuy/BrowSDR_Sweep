@@ -50,6 +50,10 @@ export const sweepMethods = {
 	sweepAvailable(this: AppInstance) {
 		return this.connected && this.deviceCapabilities?.deviceType === 'hackrf' && this.remoteMode !== 'client';
 	},
+	/** Sweep is on by default, but only takes effect on a HackRF; other devices stream as usual. */
+	sweepMode(this: AppInstance) {
+		return this.sweep.enabled && this.sweepAvailable();
+	},
 	async startSweep(this: AppInstance) {
 		if (this.running) return;
 		if (this.remoteMode !== 'none') {

@@ -265,7 +265,7 @@ export const connectionMethods = {
 				navigator.mediaSession.setActionHandler('pause', null);
 				navigator.mediaSession.setActionHandler('stop', null);
 			}
-		} else if (this.sweep.enabled && this.remoteMode === 'none') {
+		} else if (this.sweepMode() && this.remoteMode === 'none') {
 			await this.startSweep();
 		} else {
 			await this.startStream(isRestart);

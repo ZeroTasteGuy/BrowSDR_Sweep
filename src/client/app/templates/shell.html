@@ -69,7 +69,7 @@
 						<UiFormRow v-if="info.device.expansion" label="Expansion"><small>{{ info.device.expansion }}</small></UiFormRow>
 					</UiPanel>
 					<UiFormRow v-if="connected && remoteMode === 'none'">
-						<UiButton variant="secondary" style="width: 100%;" @click="startRemoteHost" :disabled="!isOnline || sweep.enabled" :title="!isOnline ? 'Not available offline' : sweep.enabled ? 'Sharing is unavailable in Sweep mode' : 'Share remote access via WebRTC'">Share Remote Access</UiButton>
+						<UiButton variant="secondary" style="width: 100%;" @click="startRemoteHost" :disabled="!isOnline || sweepMode()" :title="!isOnline ? 'Not available offline' : sweepMode() ? 'Sharing is unavailable in Sweep mode' : 'Share remote access via WebRTC'">Share Remote Access</UiButton>
 					</UiFormRow>
 					<UiFormRow class="remote-host-info" v-if="remoteMode === 'host'">
 						<small>Share this link:</small>
@@ -141,18 +141,18 @@
 				</UiPanel>
 
 				<UiPanel label="Radio" :disabled="!connected" v-model:collapsed="collapsedPanels['radio']">
-					<UiFormRow label="Center" v-if="!sweep.enabled">
+					<UiFormRow label="Center" v-if="!sweepMode()">
 						<UiInputGroup unit="MHz">
 							<UiInput type="number" v-model.number="radio.centerFreq" step="0.1" title="Center Frequency (MHz)" :disabled="autoGain.active || (remoteMode === 'client' && locks.centerFreq)"></UiInput>
 						</UiInputGroup>
 						<UiLock v-if="remoteMode === 'host' || (remoteMode === 'client' && locks.centerFreq)" :locked="locks.centerFreq" :host="remoteMode === 'host'" @toggle="locks.centerFreq = !locks.centerFreq"></UiLock>
 					</UiFormRow>
-					<UiFormRow label="Freq Shift" v-if="!sweep.enabled">
+					<UiFormRow label="Freq Shift" v-if="!sweepMode()">
 						<UiInputGroup unit="MHz">
 							<UiInput type="number" v-model.number="radio.frequencyShift" step="0.001" title="Displayed frequency = SDR frequency + shift. Use -125 MHz for a typical 125 MHz upconverter." :disabled="autoGain.active || remoteMode === 'client'"></UiInput>
 						</UiInputGroup>
 					</UiFormRow>
-					<UiFormRow label="Sample Rate" v-if="!sweep.enabled">
+					<UiFormRow label="Sample Rate" v-if="!sweepMode()">
 						<UiSelect v-model.number="radio.sampleRate" :disabled="autoGain.active || (remoteMode === 'client' && locks.sampleRate)">
 							<template v-if="deviceCapabilities">
 								<option v-for="rate in deviceCapabilities.sampleRates" :key="rate" :value="rate">{{ rate>= 1000000 ? (rate / 1000000) + ' MSPS' : (rate / 1000) + ' kSPS' }}</option>
@@ -169,7 +169,7 @@
 						<UiLock v-if="remoteMode === 'host' || (remoteMode === 'client' && locks.sampleRate)" :locked="locks.sampleRate" :host="remoteMode === 'host'" @toggle="locks.sampleRate = !locks.sampleRate"></UiLock>
 					</UiFormRow>
 					<!-- Dynamic gain controls based on connected device -->
-					<div class="auto-gain" v-if="autoGainSupported() && remoteMode !== 'client' && !sweep.enabled">
+					<div class="auto-gain" v-if="autoGainSupported() && remoteMode !== 'client' && !sweepMode()">
 						<div class="gain-actions">
 							<UiMenu :id="receiverId + '-auto-gain-options'" label="Auto gain preferences" primary-label="Auto set gains" :groups="autoGainOptions()" :disabled="!running || autoGain.active" @primary="autoSetGains('balanced')" @select="autoSetGains($event)" />
 							<GainReset />
@@ -204,7 +204,7 @@
 					<p v-if="deviceCapabilities?.deviceType === 'limesdr' && gains['Receive Mode'] === 1" role="status">USB-only diagnostic: source counters remain active; spectrum and audio are disabled.</p>
 				</UiPanel>
 
-				<template v-if="showVfos && !sweep.enabled">
+				<template v-if="showVfos && !sweepMode()">
 				<VfoPanel v-for="(vfo, i) in vfos" :key="'vfo-panel-' + i" :vfo="vfo" :i="i" />
 
 				<!-- Add VFO button -->

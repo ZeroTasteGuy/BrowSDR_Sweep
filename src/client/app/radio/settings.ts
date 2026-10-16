@@ -135,9 +135,13 @@ function restoreVfoSettings(this: AppInstance, setting: Record<string, unknown>)
 	}
 }
 
+/** Bumped when the default range or channel set changes, so older saved choices give way to the new defaults once. */
+const SWEEP_DEFAULTS_VERSION = 2;
+
 function savedSweepSettings(sweep: AppInstance['sweep'] | undefined) {
 	return (
 		sweep && {
+			defaultsVersion: SWEEP_DEFAULTS_VERSION,
 			startMHz: sweep.startMHz,
 			stopMHz: sweep.stopMHz,
 			binWidthKHz: sweep.binWidthKHz,
@@ -152,9 +156,13 @@ function savedSweepSettings(sweep: AppInstance['sweep'] | undefined) {
 function restoreSweepSettings(this: AppInstance, saved: unknown) {
 	const fields = savedSweepSettings(this.sweep);
 	if (!fields) return;
+	const defaults = { startMHz: fields.startMHz, stopMHz: fields.stopMHz, channelBand: fields.channelBand };
+	fields.defaultsVersion = 0;
 	restoreFields(fields, saved);
+	if (fields.defaultsVersion !== SWEEP_DEFAULTS_VERSION) Object.assign(fields, defaults);
 	if (fields.channelBand && !FPV_BANDS.some((band) => band.id === fields.channelBand)) fields.channelBand = this.sweep.channelBand;
 	if (!PEAK_FADE_OPTIONS.some((option) => option.value === fields.peakFadeDbPerSecond))
 		fields.peakFadeDbPerSecond = this.sweep.peakFadeDbPerSecond;
-	Object.assign(this.sweep, fields, normalizedSweepRange(fields));
+	const { defaultsVersion: _version, ...restored } = fields;
+	Object.assign(this.sweep, restored, normalizedSweepRange(restored));
 }

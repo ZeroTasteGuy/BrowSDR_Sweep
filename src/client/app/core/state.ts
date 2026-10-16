@@ -125,10 +125,10 @@ export function createAppData() {
 
 function createSweepState() {
 	return {
-		enabled: false,
+		enabled: true,
 		active: false,
-		startMHz: 5300,
-		stopMHz: 6000,
+		startMHz: 5540,
+		stopMHz: 5960,
 		binWidthKHz: 78.125,
 		peakHold: true,
 		/** How fast held peaks fall back toward the live trace, in dB per second; 0 holds forever. */
@@ -136,7 +136,7 @@ function createSweepState() {
 		/** Number the strongest peaks on the spectrum. */
 		peakMarkers: true,
 		/** FPV band whose channel centres are drawn; '' for none. */
-		channelBand: 'R',
+		channelBand: 'IMD8C',
 		rate: 0,
 		plan: null as SweepPlan | null,
 		peaks: [] as SweepPeak[],

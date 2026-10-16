@@ -125,6 +125,7 @@ export interface ReceiverMethods {
 	startStream(isRestart?: boolean): Promise<void>;
 	startSweep(): Promise<void>;
 	sweepAvailable(): boolean;
+	sweepMode(): boolean;
 	sweepBinWidthOptions(): Array<{ value: number; label: string }>;
 	sweepError(): string;
 	peakFadeOptions(): Array<{ value: number; label: string }>;

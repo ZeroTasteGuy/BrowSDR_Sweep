@@ -124,3 +124,17 @@ describe('sweep overlay', () => {
 		expect(texts).toEqual(['R1', 'R2', 'R3', 'R4', 'R5', 'R6', 'R7', 'R8', '1']);
 	});
 });
+
+describe('sweep defaults', () => {
+	it('turns sweep on only for a connected HackRF', () => {
+		const receiver = (deviceType) => ({
+			sweep: { enabled: true },
+			connected: true,
+			remoteMode: 'none',
+			deviceCapabilities: { deviceType },
+			sweepAvailable: sweepMethods.sweepAvailable,
+		});
+		expect(sweepMethods.sweepMode.call(receiver('hackrf'))).toBe(true);
+		expect(sweepMethods.sweepMode.call(receiver('rtlsdr'))).toBe(false);
+	});
+});
