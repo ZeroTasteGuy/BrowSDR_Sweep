@@ -39,8 +39,8 @@ describe('normalized spectrum display range', () => {
 	});
 	it('gives new receivers corrected default bounds', () => {
 		expect(receiver().display).toMatchObject(DEFAULT_SPECTRUM_RANGE);
-		expect(DEFAULT_SPECTRUM_RANGE.minDB).toBeCloseTo(-118.1648, 4);
-		expect(DEFAULT_SPECTRUM_RANGE.maxDB).toBeCloseTo(-48.1648, 4);
+		expect(DEFAULT_SPECTRUM_RANGE.minDB).toBe(-90);
+		expect(DEFAULT_SPECTRUM_RANGE.maxDB).toBe(-74);
 	});
 
 	it.each([8192, 65536])('migrates saved custom bounds at FFT size %i exactly once', (fftSize) => {
@@ -92,7 +92,8 @@ describe('normalized spectrum display range', () => {
 			gl: { bindTexture: vi.fn(), texSubImage2D: vi.fn() },
 			textures: [],
 		});
-		engine.setRange(DEFAULT_SPECTRUM_RANGE.minDB, DEFAULT_SPECTRUM_RANGE.maxDB);
+		const range = normalizedSpectrumRange();
+		engine.setRange(range.minDB, range.maxDB);
 		engine.renderLine([-60, -40, -20].map((level) => level - 10 * Math.log10(65536)));
 		for (const [i, level] of [-60, -40, -20].entries()) {
 			const { r, g, b } = convertDecibelToRGB(level, -70, 0);

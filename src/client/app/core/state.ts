@@ -53,12 +53,12 @@ export function createAppData() {
 		// HackRF firmware sweep. `enabled` is the user's mode choice; `active` means the display shows sweep data.
 		sweep: createSweepState(),
 		display: {
-			spectrumFps: 20,
+			spectrumFps: 60,
 			highResolutionWaterfall: true,
 			sharedChannelization: true,
 			/** 0 shows each waterfall line as measured; up to 0.95 averages it with the lines before. */
-			waterfallSmoothing: 0,
-			smoothingAxes: 'time' as SmoothingAxes,
+			waterfallSmoothing: 0.4,
+			smoothingAxes: 'frequency' as SmoothingAxes,
 			/** Share of the plot height the spectrum takes, in percent. */
 			spectrumSplit: 45,
 			...DEFAULT_SPECTRUM_RANGE,

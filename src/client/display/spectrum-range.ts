@@ -7,4 +7,5 @@ export function normalizedSpectrumRange(fftSize = DEFAULT_FFT_SIZE, minDB = -70,
 	return { minDB: minDB - offset, maxDB: maxDB - offset };
 }
 
-export const DEFAULT_SPECTRUM_RANGE = normalizedSpectrumRange();
+/** Floor and top tuned for 5.8 GHz FPV sweeps. */
+export const DEFAULT_SPECTRUM_RANGE = { minDB: -90, maxDB: -74 };
