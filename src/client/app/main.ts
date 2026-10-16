@@ -34,7 +34,6 @@ import { rdsMethods } from './decoders/rds';
 import { zoomMethods } from './display/zoom';
 import { remoteMethods } from './workspace/remote';
 import { autoGainMethods } from './radio/auto-gain';
-import { emergencyStopMethods, isEmergencyStopKey } from './radio/emergency-stop';
 import { normalizedSweepRange, sweepMethods } from './radio/sweep';
 import AdsbPanel from './decoders/adsb/panel';
 import { adsbMethods } from './decoders/adsb';
@@ -90,7 +89,6 @@ const Receiver = {
 		...zoomMethods,
 		...remoteMethods,
 		...autoGainMethods,
-		...emergencyStopMethods,
 		...sweepMethods,
 		...rtl433Methods,
 		...adsbMethods,
@@ -101,17 +99,12 @@ const Receiver = {
 	},
 	created: async function (this: AppInstance) {
 		this._cleanup = [];
-		const listen = (target: EventTarget, type: string, callback: (event: Event) => void) => {
+		const listen = (target: EventTarget, type: string, callback: () => void) => {
 			target.addEventListener(type, callback);
 			this._cleanup.push(() => target.removeEventListener(type, callback));
 		};
 		this.loadSetting();
 		this.loadBookmarks();
-		listen(document, 'keydown', (event) => {
-			if (!isEmergencyStopKey(event as KeyboardEvent)) return;
-			event.preventDefault();
-			void this.emergencyStop();
-		});
 
 		// Track online/offline status for PWA — disables internet-dependent features when offline
 		listen(window, 'online', () => {

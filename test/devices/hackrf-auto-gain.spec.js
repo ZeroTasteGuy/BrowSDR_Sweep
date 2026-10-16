@@ -4,7 +4,6 @@ import { HackRFDevice } from '@/devices/hackrf/device';
 import { HackRFRxLevel } from '@/devices/hackrf/rx-level';
 import { hackrfGainProfile, hackrfGainTotal, nextHackRFGain, createHackRFGainAdjustment } from '@/radio/hackrf-auto-gain';
 import { autoGainMethods } from '@/app/radio/auto-gain';
-import { emergencyStopMethods, isEmergencyStopKey } from '@/app/radio/emergency-stop';
 
 afterEach(() => vi.useRealTimers());
 const level = (rmsDbfs = -22, peakDbfs = -8, clippedFraction = 0) => ({
@@ -341,34 +340,4 @@ it('raises gain gradually from the staged level after enabling the amp, using fr
 		expect(hackrfGainTotal(next.gains) - hackrfGainTotal(current)).toBe(2);
 		current = next.gains;
 	}
-});
-
-describe('spacebar emergency stop', () => {
-	it('turns the amp off and gains to minimum before stopping reception', async () => {
-		const calls = [];
-		const app = {
-			...emergencyStopMethods,
-			connected: true,
-			running: true,
-			remoteMode: 'none',
-			deviceCapabilities: { deviceType: 'hackrf' },
-			autoGain: { active: false },
-			gains: { LNA: 40, VGA: 62, 'Amp (14dB)': 1 },
-			backend: { setGains: vi.fn(async (gains) => calls.push(['gains', gains])) },
-			togglePlay: vi.fn(async () => {
-				calls.push(['stop']);
-				app.running = false;
-			}),
-			showMsg: vi.fn(),
-		};
-		await app.emergencyStop();
-		expect(calls).toEqual([['gains', { 'Amp (14dB)': 0, LNA: 0, VGA: 0 }], ['stop']]);
-		expect(app.gains).toEqual({ LNA: 0, VGA: 0, 'Amp (14dB)': 0 });
-	});
-	it('ignores space while typing in a field', () => {
-		const key = (target, extra = {}) => ({ code: 'Space', repeat: false, target, ...extra });
-		expect(isEmergencyStopKey(key({ tagName: 'DIV' }))).toBe(true);
-		expect(isEmergencyStopKey(key({ tagName: 'INPUT' }))).toBe(false);
-		expect(isEmergencyStopKey(key({ tagName: 'DIV' }, { repeat: true }))).toBe(false);
-	});
 });
