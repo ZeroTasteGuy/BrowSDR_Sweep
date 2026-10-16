@@ -144,6 +144,29 @@
 .auto-gain-off {
 	opacity: 0.5;
 }
+.auto-gain-track {
+	position: relative;
+	padding: 4px 0;
+}
+.auto-gain-track .slider-group {
+	width: 100%;
+}
+.auto-gain-track .val {
+	display: none;
+}
+.auto-gain-track input[type='range'] {
+	width: 100%;
+	height: 22px;
+}
+.auto-gain-limit {
+	position: absolute;
+	top: 2px;
+	bottom: 2px;
+	width: 2px;
+	margin-left: -1px;
+	background: var(--accent-red, #ff5555);
+	pointer-events: none;
+}
 .auto-gain-scale {
 	display: flex;
 	justify-content: space-between;

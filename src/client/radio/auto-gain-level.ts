@@ -6,7 +6,11 @@ export function preferenceMode(preference: AutoGainPreference): AutoGainMode {
 	return preference < 0.25 ? 'sensitivity' : preference > 0.75 ? 'strong' : 'balanced';
 }
 
-/** RMS and peak targets in dBFS. The slider runs from -20/-6 (weak signals) to -28/-12 (strong signals). */
+/**
+ * RMS and peak targets in dBFS. The normal slider range runs from -20/-6 (weak
+ * signals, 0) to -28/-12 (strong signals, 1); it extends half as far again past
+ * each end. The peak target never comes closer than 4 dB to full scale.
+ */
 export function gainTargets(preference: AutoGainPreference = 'balanced'): { rms: number; peak: number } {
 	if (typeof preference !== 'number')
 		return preference === 'strong'
@@ -14,8 +18,8 @@ export function gainTargets(preference: AutoGainPreference = 'balanced'): { rms:
 			: preference === 'sensitivity'
 				? { rms: -20, peak: -6 }
 				: { rms: -22, peak: -6 };
-	const p = Math.max(0, Math.min(1, preference));
-	return { rms: -20 - 8 * p, peak: -6 - 6 * p };
+	const p = Math.max(-0.5, Math.min(1.5, preference));
+	return { rms: -20 - 8 * p, peak: Math.min(-4, -6 - 6 * p) };
 }
 
 /** Target receiver level while retaining headroom for peaks across the capture. */

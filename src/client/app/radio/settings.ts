@@ -175,7 +175,7 @@ function restoreAutoGainSettings(this: AppInstance, setting: Record<string, unkn
 	if (isRecord(saved)) {
 		if (typeof saved.enabled === 'boolean') this.autoGain.enabled = saved.enabled;
 		if (typeof saved.allowAmp === 'boolean') this.autoGain.allowAmp = saved.allowAmp;
-		if (typeof saved.target === 'number' && saved.target >= 0 && saved.target <= 100) this.autoGain.target = saved.target;
+		if (typeof saved.target === 'number' && saved.target >= -50 && saved.target <= 150) this.autoGain.target = saved.target;
 	}
 	if (isRecord(setting.gainsByBand)) {
 		for (const [key, gains] of Object.entries(setting.gainsByBand)) {

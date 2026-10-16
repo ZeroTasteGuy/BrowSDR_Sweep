@@ -182,8 +182,12 @@
 							<UiButton v-for="preset in autoGainPresets()" :key="preset.id" variant="secondary" :class="{ active: preset.target === undefined ? !autoGain.enabled : autoGain.enabled && autoGain.target === preset.target && autoGain.allowAmp === !!preset.allowAmp }" :title="preset.description" @click="applyAutoGainPreset(preset.id)">{{ preset.label }}</UiButton>
 						</div>
 						<div class="auto-gain-target" :class="{ 'auto-gain-off': !autoGain.enabled }">
-							<UiSlider v-model="autoGain.target" input-label="Auto gain target" :min="0" :max="100" :step="5" compact />
-							<div class="auto-gain-scale"><span>Weak signals</span><span>Strong signals</span></div>
+							<div class="auto-gain-track">
+								<UiSlider v-model="autoGain.target" input-label="Auto gain target" :min="-50" :max="150" :step="5" />
+								<span class="auto-gain-limit" style="left: calc(8px + (100% - 16px) * 0.25)" title="0: normal weak-signal end"></span>
+								<span class="auto-gain-limit" style="left: calc(8px + (100% - 16px) * 0.75)" title="100: normal strong-signal end"></span>
+							</div>
+							<div class="auto-gain-scale"><span>Weak signals</span><span>{{ autoGain.target }}</span><span>Strong signals</span></div>
 						</div>
 						<UiCheckbox v-if="deviceCapabilities?.deviceType === 'hackrf'" v-model="autoGain.allowAmp" label="Allow RF amp" title="Let auto gain switch the 14 dB amp on. Leave off near transmitters." />
 						<p role="status" :class="{ 'rx-level-warning': autoGain.enabled && autoGain.overload }">{{ !autoGain.enabled ? 'Auto gain off' : !running ? 'Auto gain on · starts with reception' : autoGain.status || 'Measuring receiver level…' }}</p>
@@ -342,9 +346,9 @@
 				<!-- Canvas Overlay lines -->
 				<div class="freq-axis">
 					<div class="tick" style="left: 0%">{{ labelFreq(0) }}</div>
-					<div class="tick" style="left: 25%">{{ labelFreq(0.25) }}</div>
+					<div class="tick" style="left: calc(8px + (100% - 16px) * 0.25)">{{ labelFreq(0.25) }}</div>
 					<div class="tick" style="left: 50%">{{ labelFreq(0.5) }}</div>
-					<div class="tick" style="left: 75%">{{ labelFreq(0.75) }}</div>
+					<div class="tick" style="left: calc(8px + (100% - 16px) * 0.75)">{{ labelFreq(0.75) }}</div>
 					<div class="tick" style="right: 0px">{{ labelFreq(1) }}</div>
 				</div>
 				<div class="hover-tick" ref="hoverTick" style="display: none">{{ hoverFreqText }}</div>
