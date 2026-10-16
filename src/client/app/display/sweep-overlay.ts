@@ -62,7 +62,7 @@ function drawSelection(
 	ctx.strokeRect(left + 0.5, 0.5, Math.max(0, right - left - 1), h - 1);
 	ctx.fillStyle = SELECTION_EDGE;
 	ctx.textAlign = 'center';
-	ctx.fillText(`${Math.floor(startMHz)}\u2013${Math.ceil(stopMHz)} MHz`, (left + right) / 2, 24);
+	ctx.fillText(`${startMHz.toFixed(1)}\u2013${stopMHz.toFixed(1)} MHz`, (left + right) / 2, 24);
 	ctx.textAlign = 'left';
 }
 

@@ -1,6 +1,6 @@
 import * as Comlink from 'comlink';
 import type { AppInstance } from '@/app/core/receiver.types';
-import { planSweep, SWEEP_BIN_WIDTHS_HZ, SWEEP_MAX_MHZ } from '@/devices/hackrf/sweep';
+import { planSweep, SWEEP_BIN_WIDTHS_HZ } from '@/devices/hackrf/sweep';
 import { errorMessage } from '@/platform/errors';
 import { resetSweepTraces } from '@/app/display/sweep-overlay';
 import { channelLabel, FPV_BANDS, PEAK_FADE_OPTIONS, SWEEP_PRESETS } from '@/display/fpv';
@@ -27,19 +27,24 @@ export const sweepMethods = {
 	clearSweepPeaks(this: AppInstance) {
 		resetSweepTraces(this);
 	},
-	/** Sweep just the part of the spectrum dragged across; the old range can be brought back with previousSweepRange. */
-	selectSweepRange(this: AppInstance, fromMHz: number, toMHz: number) {
-		const startMHz = Math.max(0, Math.floor(Math.min(fromMHz, toMHz)));
-		const stopMHz = Math.min(SWEEP_MAX_MHZ, Math.ceil(Math.max(fromMHz, toMHz)));
-		if (stopMHz <= startMHz || (startMHz === this.sweep.startMHz && stopMHz === this.sweep.stopMHz)) return;
-		const history = this.sweep.rangeHistory;
-		history.push({ startMHz: this.sweep.startMHz, stopMHz: this.sweep.stopMHz });
-		if (history.length > RANGE_HISTORY_LIMIT) history.shift();
-		Object.assign(this.sweep, { startMHz, stopMHz });
+	/** Zoom the display into the part of the spectrum dragged across. The sweep itself keeps its full range. */
+	zoomToSweepSelection(this: AppInstance, fromMHz: number, toMHz: number) {
+		const plan = this.sweep.plan;
+		if (!plan) return;
+		const spanMHz = plan.stopMHz - plan.startMHz;
+		const from = Math.max(0, (Math.min(fromMHz, toMHz) - plan.startMHz) / spanMHz);
+		const to = Math.min(1, (Math.max(fromMHz, toMHz) - plan.startMHz) / spanMHz);
+		if (to <= from) return;
+		const zoomScale = Math.min(MAX_ZOOM, 1 / (to - from));
+		this.view.zoomScale = zoomScale;
+		this.view.zoomOffset = Math.max(0, Math.min(1 - 1 / zoomScale, from));
+		this.applyZoomToEngine();
 	},
-	previousSweepRange(this: AppInstance) {
-		const previous = this.sweep.rangeHistory.pop();
-		if (previous) Object.assign(this.sweep, previous);
+	/** Back to the whole swept range. */
+	resetSweepZoom(this: AppInstance) {
+		this.view.zoomScale = 1;
+		this.view.zoomOffset = 0;
+		this.applyZoomToEngine();
 	},
 	/** "R5" when a peak sits within 3 MHz of a channel of the selected band. */
 	peakChannel(this: AppInstance, freqMHz: number) {
@@ -109,7 +114,8 @@ export const sweepMethods = {
 	},
 };
 
-const RANGE_HISTORY_LIMIT = 20;
+/** Same limit as wheel and pinch zoom. */
+const MAX_ZOOM = 100;
 
 function sweepRequest(app: AppInstance) {
 	return { startMHz: app.sweep.startMHz, stopMHz: app.sweep.stopMHz, binWidthHz: app.sweep.binWidthKHz * 1e3 };
