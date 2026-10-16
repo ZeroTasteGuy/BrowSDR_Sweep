@@ -131,8 +131,8 @@ function createSweepState() {
 		stopMHz: 6000,
 		binWidthKHz: 78.125,
 		peakHold: true,
-		/** Let held peaks fall back slowly instead of holding forever. */
-		peakFade: false,
+		/** How fast held peaks fall back toward the live trace, in dB per second; 0 holds forever. */
+		peakFadeDbPerSecond: 0,
 		/** Number the strongest peaks on the spectrum. */
 		peakMarkers: true,
 		/** FPV band whose channel centres are drawn; '' for none. */

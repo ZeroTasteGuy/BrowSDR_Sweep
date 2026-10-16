@@ -6,13 +6,11 @@ import type { ContrastRange } from '@/display/contrast.types';
 const ANALYSIS_INTERVAL_MS = 500;
 const PEAK_COUNT = 5;
 const CHANNEL_COLOR = 'rgba(255, 170, 60, 0.75)';
-/** With fade on, held peaks fall back toward the live trace at this rate. */
-const PEAK_FADE_DB_PER_SECOND = 6;
 
 /** Per-frame sweep bookkeeping: max-hold, the cross-sweep average and, twice a second, the strongest peaks. */
 export function trackSweepFrame(app: AppInstance, data: Float32Array) {
 	const now = performance.now();
-	const fadeDb = app.sweep.peakFade && app._sweepFrameAt ? ((now - app._sweepFrameAt) / 1000) * PEAK_FADE_DB_PER_SECOND : 0;
+	const fadeDb = app._sweepFrameAt ? ((now - app._sweepFrameAt) / 1000) * app.sweep.peakFadeDbPerSecond : 0;
 	app._sweepFrameAt = now;
 	app._sweepPeak = app.sweep.peakHold ? maxHold(app._sweepPeak, data, fadeDb) : undefined;
 	app._sweepAverage = averageSweep(app._sweepAverage, data);

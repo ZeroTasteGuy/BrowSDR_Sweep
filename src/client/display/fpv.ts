@@ -10,6 +10,14 @@ export const SWEEP_PRESETS: SweepPreset[] = [
 	{ id: 'sub-ghz', label: '868 / 915 MHz control (860–940)', startMHz: 860, stopMHz: 940 },
 ];
 
+/** Peak hold fade speeds in dB per second; 0 holds peaks until cleared. */
+export const PEAK_FADE_OPTIONS = [
+	{ value: 0, label: 'Off (hold)' },
+	{ value: 3, label: 'Slow (3 dB/s)' },
+	{ value: 10, label: 'Medium (10 dB/s)' },
+	{ value: 30, label: 'Fast (30 dB/s)' },
+];
+
 export const FPV_BANDS: FpvBand[] = [
 	{ id: 'R', name: 'Raceband', channels: [5658, 5695, 5732, 5769, 5806, 5843, 5880, 5917] },
 	{ id: 'F', name: 'Fatshark', channels: [5740, 5760, 5780, 5800, 5820, 5840, 5860, 5880] },

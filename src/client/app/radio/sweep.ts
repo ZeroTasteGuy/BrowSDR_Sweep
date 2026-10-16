@@ -3,9 +3,12 @@ import type { AppInstance } from '@/app/core/receiver.types';
 import { planSweep, SWEEP_BIN_WIDTHS_HZ } from '@/devices/hackrf/sweep';
 import { errorMessage } from '@/platform/errors';
 import { resetSweepTraces } from '@/app/display/sweep-overlay';
-import { FPV_BANDS, SWEEP_PRESETS } from '@/display/fpv';
+import { FPV_BANDS, PEAK_FADE_OPTIONS, SWEEP_PRESETS } from '@/display/fpv';
 
 export const sweepMethods = {
+	peakFadeOptions() {
+		return PEAK_FADE_OPTIONS;
+	},
 	sweepPresets() {
 		return SWEEP_PRESETS;
 	},

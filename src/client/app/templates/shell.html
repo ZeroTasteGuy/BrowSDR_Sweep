@@ -121,8 +121,12 @@
 						</UiFormRow>
 						<UiFormRow>
 							<UiCheckbox variant="native" v-model="sweep.peakHold" label="Peak hold" style="flex:1"></UiCheckbox>
-							<UiCheckbox variant="native" v-model="sweep.peakFade" label="Fade" :disabled="!sweep.peakHold" title="Let held peaks fall back slowly, so old bursts don't stay on screen"></UiCheckbox>
 							<UiButton variant="secondary" @click="clearSweepPeaks" title="Start peak hold and peak markers over">Clear</UiButton>
+						</UiFormRow>
+						<UiFormRow label="Peak fade" v-if="sweep.peakHold">
+							<UiSelect v-model.number="sweep.peakFadeDbPerSecond" title="How fast held peaks fall back toward the live trace">
+								<option v-for="option in peakFadeOptions()" :key="option.value" :value="option.value">{{ option.label }}</option>
+							</UiSelect>
 						</UiFormRow>
 						<UiFormRow>
 							<UiCheckbox variant="native" v-model="sweep.peakMarkers" label="Peak markers" style="flex:1"></UiCheckbox>

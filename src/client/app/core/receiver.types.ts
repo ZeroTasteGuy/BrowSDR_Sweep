@@ -127,6 +127,7 @@ export interface ReceiverMethods {
 	sweepAvailable(): boolean;
 	sweepBinWidthOptions(): Array<{ value: number; label: string }>;
 	sweepError(): string;
+	peakFadeOptions(): Array<{ value: number; label: string }>;
 	sweepPresets(): SweepPreset[];
 	fpvBands(): FpvBand[];
 	sweepPresetId(): string;
