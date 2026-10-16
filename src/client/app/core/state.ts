@@ -140,6 +140,8 @@ function createSweepState() {
 		rate: 0,
 		plan: null as SweepPlan | null,
 		peaks: [] as SweepPeak[],
+		/** Ranges replaced by drag-selecting on the spectrum, newest last, for "Previous range". Not saved. */
+		rangeHistory: [] as Array<{ startMHz: number; stopMHz: number }>,
 	};
 }
 

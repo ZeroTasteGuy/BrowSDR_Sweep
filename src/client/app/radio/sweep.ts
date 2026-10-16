@@ -1,6 +1,6 @@
 import * as Comlink from 'comlink';
 import type { AppInstance } from '@/app/core/receiver.types';
-import { planSweep, SWEEP_BIN_WIDTHS_HZ } from '@/devices/hackrf/sweep';
+import { planSweep, SWEEP_BIN_WIDTHS_HZ, SWEEP_MAX_MHZ } from '@/devices/hackrf/sweep';
 import { errorMessage } from '@/platform/errors';
 import { resetSweepTraces } from '@/app/display/sweep-overlay';
 import { channelLabel, FPV_BANDS, PEAK_FADE_OPTIONS, SWEEP_PRESETS } from '@/display/fpv';
@@ -26,6 +26,20 @@ export const sweepMethods = {
 	/** Start peak hold and the averaged peaks over, e.g. after moving a transmitter. */
 	clearSweepPeaks(this: AppInstance) {
 		resetSweepTraces(this);
+	},
+	/** Sweep just the part of the spectrum dragged across; the old range can be brought back with previousSweepRange. */
+	selectSweepRange(this: AppInstance, fromMHz: number, toMHz: number) {
+		const startMHz = Math.max(0, Math.floor(Math.min(fromMHz, toMHz)));
+		const stopMHz = Math.min(SWEEP_MAX_MHZ, Math.ceil(Math.max(fromMHz, toMHz)));
+		if (stopMHz <= startMHz || (startMHz === this.sweep.startMHz && stopMHz === this.sweep.stopMHz)) return;
+		const history = this.sweep.rangeHistory;
+		history.push({ startMHz: this.sweep.startMHz, stopMHz: this.sweep.stopMHz });
+		if (history.length > RANGE_HISTORY_LIMIT) history.shift();
+		Object.assign(this.sweep, { startMHz, stopMHz });
+	},
+	previousSweepRange(this: AppInstance) {
+		const previous = this.sweep.rangeHistory.pop();
+		if (previous) Object.assign(this.sweep, previous);
 	},
 	/** "R5" when a peak sits within 3 MHz of a channel of the selected band. */
 	peakChannel(this: AppInstance, freqMHz: number) {
@@ -94,6 +108,8 @@ export const sweepMethods = {
 		}
 	},
 };
+
+const RANGE_HISTORY_LIMIT = 20;
 
 function sweepRequest(app: AppInstance) {
 	return { startMHz: app.sweep.startMHz, stopMHz: app.sweep.stopMHz, binWidthHz: app.sweep.binWidthKHz * 1e3 };

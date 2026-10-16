@@ -7,6 +7,8 @@ import { sidebandOffsetHz } from '@/worker/decoders/ssb';
 import { updateContrast } from './contrast';
 import { submitDiscovery, drawDiscovery } from '@/app/discovery/bridge';
 import { drawSweepOverlays, trackSweepFrame } from './sweep-overlay';
+import { createSweepSelection } from './sweep-selection';
+import type { SweepSelection } from './types';
 
 export const canvasMethods = {
 	initCanvas(this: AppInstance) {
@@ -267,9 +269,13 @@ export function mountCanvas(this: AppInstance) {
 	document.body.addEventListener('touchstart', resumeAudio, { passive: true });
 
 	// Event listeners for tuning on canvas
-	const { handleMouseMove, leaveListener, handleMouseDown, handleMouseUp, handleContextMenu, updateHover } = createMouseHandlers.call(this);
+	const selection = createSweepSelection(this);
+	const { handleMouseMove, leaveListener, handleMouseDown, handleMouseUp, handleContextMenu, updateHover } = createMouseHandlers.call(
+		this,
+		selection,
+	);
 
-	const { handleTouchStart, handleTouchMove, handleTouchEnd } = createTouchHandlers.call(this);
+	const { handleTouchStart, handleTouchMove, handleTouchEnd } = createTouchHandlers.call(this, selection);
 
 	const attachCanvasEvents = (canvas: HTMLElement) => {
 		canvas.addEventListener('mousemove', handleMouseMove as EventListener);
@@ -329,7 +335,7 @@ export function mountCanvas(this: AppInstance) {
 	}
 }
 
-function createMouseHandlers(this: AppInstance) {
+function createMouseHandlers(this: AppInstance, selection: SweepSelection) {
 	let isDraggingVFO = false;
 	let isPanning = false;
 	let lastPanX = 0;
@@ -352,7 +358,8 @@ function createMouseHandlers(this: AppInstance) {
 	};
 
 	const handleMouseMove = (e: MouseEvent) => {
-		if (isDraggingVFO && !this.view.locked) {
+		if (selection.mouseMove(e)) updateHover(e);
+		else if (isDraggingVFO && !this.view.locked) {
 			const f = getFreqFromEvent(e);
 			const idx = this.activeVfoIndex;
 			if (idx >= 0 && idx < this.vfos.length) {
@@ -391,11 +398,13 @@ function createMouseHandlers(this: AppInstance) {
 				this.validateAndApplyVfoFreq(idx, finalFreq);
 			}
 		}
+		selection.cancel();
 		isDraggingVFO = false;
 		isPanning = false;
 	};
 
 	const handleMouseDown = (e: MouseEvent) => {
+		if (selection.mouseDown(e)) return;
 		if (e.button === 0 && !this.view.locked && this.showVfos && !this.sweep.active) {
 			// Left click: set active VFO frequency
 			isDraggingVFO = true;
@@ -414,7 +423,8 @@ function createMouseHandlers(this: AppInstance) {
 		}
 	};
 
-	const handleMouseUp = (_e: MouseEvent) => {
+	const handleMouseUp = (e: MouseEvent) => {
+		selection.mouseUp(e);
 		if (isDraggingVFO) {
 			const idx = this.activeVfoIndex;
 			if (idx >= 0 && idx < this.vfos.length) {
@@ -433,7 +443,7 @@ function createMouseHandlers(this: AppInstance) {
 	return { handleMouseMove, leaveListener, handleMouseDown, handleMouseUp, handleContextMenu, updateHover };
 }
 
-function createTouchHandlers(this: AppInstance) {
+function createTouchHandlers(this: AppInstance, selection: SweepSelection) {
 	let touchStartDist = 0;
 	let touchStartScale = 1;
 	let touchStartOffset = 0;
@@ -452,6 +462,7 @@ function createTouchHandlers(this: AppInstance) {
 		if (e.touches.length === 2) {
 			// Pinch start
 			e.preventDefault();
+			selection.cancel();
 			touchIsPanning = false;
 			touchStartDist = getTouchDist(e.touches[0], e.touches[1]);
 			touchStartScale = this.view.zoomScale;
@@ -485,6 +496,8 @@ function createTouchHandlers(this: AppInstance) {
 			this.view.zoomScale = newScale;
 			this.view.zoomOffset = newOffset;
 			this.applyZoomToEngine();
+		} else if (selection.touchMove(e, touchStartX, touchStartY)) {
+			return;
 		} else if (e.touches.length === 1) {
 			// Single finger pan (only when zoomed in)
 			const dx = e.touches[0].clientX - touchStartX;
@@ -515,6 +528,7 @@ function createTouchHandlers(this: AppInstance) {
 	};
 
 	const handleTouchEnd = (e: TouchEvent) => {
+		if (selection.touchEnd(e)) return;
 		if (e.touches.length === 0 && !touchIsPanning && !this.view.locked && this.showVfos && !this.sweep.active) {
 			// Tap-to-tune: only if it was a quick, short-distance touch
 			const elapsed = Date.now() - touchStartTime;

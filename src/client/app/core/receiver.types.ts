@@ -58,6 +58,8 @@ export interface ReceiverInternals {
 	_sweepAverage?: Float32Array;
 	_sweepAnalysedAt?: number;
 	_sweepFrameAt?: number;
+	/** The range being dragged out on the spectrum in sweep mode, in display MHz. */
+	_sweepSelection?: { fromMHz: number; toMHz: number };
 	_zoomRepaint?: boolean;
 	_lastFrameTime: number;
 	_framesDrawn: number;
@@ -134,6 +136,8 @@ export interface ReceiverMethods {
 	sweepPresetId(): string;
 	applySweepPreset(id: string): void;
 	clearSweepPeaks(): void;
+	selectSweepRange(fromMHz: number, toMHz: number): void;
+	previousSweepRange(): void;
 	peakChannel(freqMHz: number): string;
 	initCanvas(): void;
 	resizeFftCanvas(): void;

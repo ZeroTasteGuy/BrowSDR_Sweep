@@ -11,3 +11,13 @@ export interface DisplayState {
 	minDB: number;
 	maxDB: number;
 }
+
+/** Drag-to-select in sweep mode; each handler returns true when it consumed the event. */
+export interface SweepSelection {
+	mouseDown(e: MouseEvent): boolean;
+	mouseMove(e: MouseEvent): boolean;
+	mouseUp(e: MouseEvent): boolean;
+	cancel(): void;
+	touchMove(e: TouchEvent, touchStartX: number, touchStartY: number): boolean;
+	touchEnd(e: TouchEvent): boolean;
+}
