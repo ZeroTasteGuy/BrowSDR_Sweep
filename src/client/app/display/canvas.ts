@@ -252,11 +252,23 @@ function renderWaterfallFrame(this: AppInstance, data: Float32Array<ArrayBufferL
 	// Waterfall drawing — skip adding a new history row when this is just a zoom repaint
 	if (!this._zoomRepaint) {
 		const step = this._waterfallClock.advance(now);
+		if (this._gainMarkerPending) {
+			this._gainMarkerPending = false;
+			wfData = withGainMarker(wfData === data ? data.slice() : wfData, this.display.maxDB);
+		}
 		this._waterfallEngine.renderLine(wfData, step.rows, step.fraction);
 	} else if (this._waterfallEngine.render) {
 		// For a zoom-only repaint, just redraw the existing texture at the new zoom
 		this._waterfallEngine.render();
 	}
+}
+
+/** A bright tick at both edges of the waterfall row where auto gain changed the gain. */
+export function withGainMarker(row: Float32Array<ArrayBufferLike>, maxDB: number) {
+	const width = Math.max(2, Math.round(row.length * 0.008));
+	row.fill(maxDB + 20, 0, width);
+	row.fill(maxDB + 20, row.length - width);
+	return row;
 }
 
 export function mountCanvas(this: AppInstance) {

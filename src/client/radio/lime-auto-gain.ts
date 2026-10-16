@@ -1,5 +1,5 @@
-import type { LimeGains, RxLevel, AutoGainMode } from './types';
-import { gainAdjustment, gainAdjustmentReason } from './auto-gain-level';
+import type { LimeGains, RxLevel, AutoGainMode, AutoGainPreference } from './types';
+import { gainAdjustment, gainAdjustmentReason, preferenceMode } from './auto-gain-level';
 
 const lnaSteps = [0, 3, 6, 9, 12, 15, 18, 21, 24, 25, 26, 27, 28, 29, 30];
 const tiaDb = [0, 9, 12];
@@ -23,10 +23,11 @@ export function limeGainProfile(total: number, mode: AutoGainMode = 'balanced'):
 export function nextLimeGain(
 	gains: LimeGains,
 	level: RxLevel,
-	mode: AutoGainMode = 'balanced',
+	preference: AutoGainPreference = 'balanced',
 ): { gains: LimeGains; reason: string; done: boolean } {
 	const total = limeGainTotal(gains);
-	const change = gainAdjustment(level, mode);
+	const change = gainAdjustment(level, preference);
+	const mode = preferenceMode(preference);
 	const next = change || mode !== 'balanced' ? limeGainProfile(total + change, mode) : gains;
 	const unchanged = next.LNA === gains.LNA && next.TIA === gains.TIA && next.PGA === gains.PGA;
 	return {

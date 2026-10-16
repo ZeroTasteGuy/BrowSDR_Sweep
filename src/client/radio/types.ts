@@ -34,6 +34,8 @@ export interface RxLevel {
 	samples: number;
 	rmsDbfs: number;
 	peakDbfs: number;
+	/** RMS including the DC offset, when the meter removes it from `rmsDbfs`. */
+	rawRmsDbfs?: number;
 	clippedFraction: number;
 }
 
@@ -111,3 +113,11 @@ export type HackRFGains = { LNA: number; VGA: number; 'Amp (14dB)'?: number };
 export type LimeGains = { LNA: number; TIA: number; PGA: number };
 
 export type AutoGainMode = 'balanced' | 'sensitivity' | 'strong';
+/** A named mode, or a slider position from 0 (weak signals) to 1 (strong signals). */
+export type AutoGainPreference = AutoGainMode | number;
+
+export interface GainDecision {
+	act: boolean;
+	/** Why the change was held back, if it was. */
+	held?: string;
+}

@@ -34,6 +34,7 @@ import { rdsMethods } from './decoders/rds';
 import { zoomMethods } from './display/zoom';
 import { remoteMethods } from './workspace/remote';
 import { autoGainMethods } from './radio/auto-gain';
+import { watchGainBands } from './radio/gain-bands';
 import { normalizedSweepRange, sweepMethods } from './radio/sweep';
 import AdsbPanel from './decoders/adsb/panel';
 import { adsbMethods } from './decoders/adsb';
@@ -182,6 +183,8 @@ function watchReceiverSettings(this: AppInstance) {
 	watchGainChanges.call(this);
 
 	watchSweepSettings.call(this);
+	watchAutoGain.call(this);
+	watchGainBands.call(this);
 
 	this.$watch(
 		'vfos',
@@ -267,6 +270,22 @@ function watchReceiverSettings(this: AppInstance) {
 	);
 }
 
+/** Run the continuous auto gain loop whenever it is switched on and reception allows it. */
+function watchAutoGain(this: AppInstance) {
+	this.$watch(
+		() => this.autoGainLoopWanted(),
+		(wanted: boolean) => {
+			if (wanted) void this.runAutoGainLoop();
+		},
+		{ immediate: true },
+	);
+	this.$watch(
+		() => [this.autoGain.enabled, this.autoGain.target, this.autoGain.allowAmp, this.gainsByBand],
+		() => this.saveSetting(),
+		{ deep: true },
+	);
+}
+
 /** Switching mode or editing the range restarts reception on the already-open device; no reconnect. */
 function watchSweepSettings(this: AppInstance) {
 	let restartTimer: ReturnType<typeof setTimeout> | null = null;
@@ -320,6 +339,11 @@ function watchGainChanges(this: AppInstance) {
 		'gains',
 		() => {
 			if (this.autoGain.active) return;
+			if (this.autoGain.enabled && this.running && !this._gainsFromCode && !this._applyingSync && this.remoteMode !== 'client') {
+				// Moving a gain slider by hand takes over from auto gain.
+				this.autoGain.enabled = false;
+				this.showMsg('Auto gain off: gain changed by hand');
+			}
 			// Debounce: wait for slider to settle before sending USB commands.
 			// Dragging fires many intermediate values — only the final one matters.
 			if (gainDebounce) clearTimeout(gainDebounce);

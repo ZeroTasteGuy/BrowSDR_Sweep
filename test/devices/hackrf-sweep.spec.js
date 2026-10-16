@@ -111,12 +111,12 @@ describe('sweep block parsing', () => {
 });
 
 describe('sweep level measurement', () => {
-	it('measures only block IQ, so headers never read as overload', () => {
+	it('measures only settled block IQ, so headers and retunes never read as overload', () => {
 		const transfer = new Uint8Array(SWEEP_BLOCK_BYTES * 2);
 		transfer.set(block(5_300_000_000, 256), 0);
 		transfer.set(block(5_320_000_000, 256), SWEEP_BLOCK_BYTES);
 		const samples = sweepBlockSamples(transfer);
-		expect(samples.map((iq) => iq.length)).toEqual([SWEEP_BLOCK_BYTES - 16, SWEEP_BLOCK_BYTES - 16]);
+		expect(samples.map((iq) => iq.length)).toEqual([SWEEP_BLOCK_BYTES / 2, SWEEP_BLOCK_BYTES / 2]);
 		const level = new HackRFRxLevel();
 		level.reset(1);
 		for (let pass = 0; pass < 8; pass++) for (const iq of samples) level.observe(iq, 1);

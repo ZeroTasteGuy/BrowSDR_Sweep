@@ -1,35 +1,28 @@
-import { expect, it, vi } from 'vitest';
+import { expect, it } from 'vitest';
 import { mount } from '@vue/test-utils';
 import { ReceiverView } from '../helpers/receiver-view';
 import { HackRFDevice } from '@/devices/hackrf/device';
 
-it('runs Balanced from the main button and selected preferences from the disclosure', async () => {
+it('switches auto gain with the toggle and presets, and sets the target and amp rule', async () => {
 	const wrapper = mount(ReceiverView);
-	const run = vi.spyOn(wrapper.vm, 'autoSetGains').mockResolvedValue(undefined);
 	await wrapper.setData({
 		deviceCapabilities: new HackRFDevice(),
 		gains: { LNA: 16, VGA: 16, 'Amp (14dB)': 0 },
 		connected: true,
-		running: true,
+		running: false,
 	});
-	const actions = wrapper.get('.auto-gain');
-	await actions.get('.ui-menu-split > button').trigger('click');
-	expect(run).toHaveBeenLastCalledWith('balanced');
-	const trigger = actions.get('[aria-label="Auto gain preferences"]');
-	for (const [label, mode] of [
-		['Weak signals', 'sensitivity'],
-		['Strong signals', 'strong'],
-		['Balanced', 'balanced'],
-	]) {
-		await trigger.trigger('click');
-		await actions.get(`[aria-label="${label}"]`).trigger('click');
-		expect(run).toHaveBeenLastCalledWith(mode);
-		expect(trigger.attributes('aria-expanded')).toBe('false');
-	}
-	await actions.get('.ui-menu-split > button').trigger('click');
-	expect(run).toHaveBeenLastCalledWith('balanced');
-	await wrapper.setData({ autoGain: { active: true } });
-	expect(actions.get('.ui-menu-split > button').attributes('disabled')).toBeDefined();
-	expect(trigger.attributes('disabled')).toBeDefined();
+	const panel = wrapper.get('.auto-gain');
+	expect(panel.text()).toContain('Auto gain off');
+	await panel.get('.auto-gain-toggle input').setValue(true);
+	expect(wrapper.vm.autoGain.enabled).toBe(true);
+	expect(panel.text()).toContain('starts with reception');
+	const preset = (label) => panel.findAll('.auto-gain-presets button').find((button) => button.text() === label);
+	await preset('Race').trigger('click');
+	expect(wrapper.vm.autoGain).toMatchObject({ enabled: true, target: 80, allowAmp: false });
+	await preset('Scan').trigger('click');
+	expect(wrapper.vm.autoGain).toMatchObject({ enabled: true, target: 20, allowAmp: false });
+	expect(preset('Scan').classes()).toContain('active');
+	await preset('Manual').trigger('click');
+	expect(wrapper.vm.autoGain.enabled).toBe(false);
 	wrapper.unmount();
 });

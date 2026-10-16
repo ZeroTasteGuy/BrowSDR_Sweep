@@ -1,4 +1,5 @@
 import type { AutoGainMode } from '@/radio/types';
+import type { AutoGainPreset } from '@/app/radio/types';
 import type { FpvBand, SweepPreset } from '@/display/types';
 import type { UiMenuGroup } from '@/ui/menus/types';
 import type { BleMessage } from '@/worker/decoders/ble/types';
@@ -85,6 +86,12 @@ export interface ReceiverInternals {
 	_playChanging?: boolean;
 	_disconnecting?: boolean;
 	_applyingSync?: boolean;
+	/** Identifies the running continuous auto gain loop. */
+	_autoGainLoop?: number | null;
+	/** Set while code, not the user, writes `gains`. */
+	_gainsFromCode?: boolean;
+	/** Mark the next waterfall row: auto gain just changed the gain. */
+	_gainMarkerPending?: boolean;
 	_hostRunning?: boolean;
 	_resumeAfterHostPause?: boolean;
 	_pendingImportFile: File | null;
@@ -221,6 +228,11 @@ export interface ReceiverMethods {
 	autoGainControls(): string;
 	cancelAutoGain(): void;
 	autoGainOptions(): UiMenuGroup[];
+	autoGainPresets(): AutoGainPreset[];
+	applyAutoGainPreset(id: string): void;
+	autoGainLoopWanted(): boolean;
+	runAutoGainLoop(): Promise<void>;
+	setGainsFromCode(gains: Record<string, number>): Promise<void>;
 	autoSetGains(mode?: AutoGainMode): Promise<void>;
 	toggleBlePanel(): void;
 	_onBleMessage(index: number, freq: number, msg: BleMessage): void;

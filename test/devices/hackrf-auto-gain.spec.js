@@ -4,6 +4,8 @@ import { HackRFDevice } from '@/devices/hackrf/device';
 import { HackRFRxLevel } from '@/devices/hackrf/rx-level';
 import { hackrfGainProfile, hackrfGainTotal, nextHackRFGain, createHackRFGainAdjustment } from '@/radio/hackrf-auto-gain';
 import { autoGainMethods } from '@/app/radio/auto-gain';
+import { gainBand } from '@/app/radio/gain-bands';
+import { withGainMarker } from '@/app/display/canvas';
 
 afterEach(() => vi.useRealTimers());
 const level = (rmsDbfs = -22, peakDbfs = -8, clippedFraction = 0) => ({
@@ -19,7 +21,8 @@ describe('HackRF ADC level measurements', () => {
 	it('interprets USB bytes as signed IQ and respects view offsets without changing data', () => {
 		const buffer = new Uint8Array(4104).fill(127);
 		const data = buffer.subarray(4, 4100);
-		data.fill(192); // -64 as a signed byte
+		// ±64, alternating every two IQ pairs so the strided sampling sees both.
+		data.forEach((_, index) => (data[index] = index % 8 < 4 ? 192 : 64));
 		const original = buffer.slice();
 		const meter = new HackRFRxLevel();
 		meter.reset(1000);
@@ -29,6 +32,26 @@ describe('HackRF ADC level measurements', () => {
 		expect(meter.level.clippedFraction).toBe(0);
 		expect(meter.level.samples).toBeLessThanOrEqual(2048);
 		expect(buffer).toEqual(original);
+	});
+	it('removes the DC offset from RMS and peak but still reports it raw', () => {
+		const tone = (offset) => new Int8Array(4096).map((_, index) => (index % 8 < 4 ? -32 : 32) + offset);
+		const meter = new HackRFRxLevel();
+		meter.reset(1000);
+		meter.observe(tone(0), 1250);
+		const clean = meter.level;
+		meter.observe(tone(40), 1500);
+		const offset = meter.level;
+		expect(offset.rmsDbfs).toBeCloseTo(clean.rmsDbfs);
+		expect(offset.peakDbfs).toBeCloseTo(clean.peakDbfs);
+		expect(offset.rawRmsDbfs).toBeGreaterThan(clean.rawRmsDbfs + 3);
+	});
+	it('treats a pure DC offset as low gain, not a dead stream', () => {
+		const meter = new HackRFRxLevel();
+		meter.reset(1000);
+		meter.observe(new Int8Array(4096).fill(6), 1250);
+		expect(meter.level.rmsDbfs).toBe(-120);
+		expect(nextHackRFGain({ LNA: 0, VGA: 0, 'Amp (14dB)': 0 }, meter.level).done).toBe(false);
+		expect(hackrfGainTotal(nextHackRFGain({ LNA: 0, VGA: 0, 'Amp (14dB)': 0 }, meter.level).gains)).toBeGreaterThan(0);
 	});
 	it('detects both ADC rails, reports silent samples and clears stale measurements', () => {
 		const meter = new HackRFRxLevel();
@@ -54,7 +77,7 @@ describe('HackRF ADC level measurements', () => {
 		const callback = vi.fn();
 		const starting = device.startRx(callback);
 		await vi.advanceTimersByTimeAsync(300);
-		const samples = new Int8Array(4096).fill(-16);
+		const samples = new Int8Array(4096).map((_, index) => (index % 8 < 4 ? -16 : 16));
 		transfers.shift()({ status: 'ok', data: new DataView(samples.buffer) });
 		await vi.advanceTimersByTimeAsync(1);
 		await starting;
@@ -160,10 +183,12 @@ describe('HackRF one-shot automatic gain lifecycle', () => {
 		await run;
 		const writes = app.backend.setGain.mock.calls;
 		expect(writes.at(-1)).toEqual(['Amp (14dB)', 1]);
+		// 72 dB drops by 16 dB to 56 dB before the amp goes on.
 		expect(writes.slice(0, -1)).toEqual([
-			['LNA', 0],
-			['VGA', 0],
+			['LNA', 24],
+			['VGA', 32],
 		]);
+		expect(app.gains.LNA + app.gains.VGA).toBe(56);
 		expect(app.gains['Amp (14dB)']).toBe(1);
 	});
 	it('turns the RF amplifier off before increasing downstream gain after overload', async () => {
@@ -236,13 +261,12 @@ describe('HackRF gain preferences', () => {
 		const starting = { LNA: 16, VGA: 16, 'Amp (14dB)': 0 };
 		const weak = nextHackRFGain(starting, level(-20, -8), 'sensitivity');
 		expect(weak.gains['Amp (14dB)']).toBe(1);
-		expect(weak.gains.LNA).toBe(0);
-		expect(weak.gains).toEqual({ LNA: 0, VGA: 0, 'Amp (14dB)': 1 });
+		expect(weak.gains).toEqual({ LNA: 16, VGA: 0, 'Amp (14dB)': 1 });
 		expect(weak.done).toBe(false);
 		const strong = nextHackRFGain(weak.gains, level(-28, -14), 'strong');
 		expect(strong.gains['Amp (14dB)']).toBe(0);
 		expect(strong.gains.LNA).toBeLessThan(strong.gains.VGA);
-		expect(hackrfGainTotal(strong.gains)).toBe(10);
+		expect(hackrfGainTotal(strong.gains)).toBe(26);
 	});
 	it('retains clipping protection in sensitivity mode and can inhibit amp retries', () => {
 		const starting = { LNA: 32, VGA: 40, 'Amp (14dB)': 1 };
@@ -265,7 +289,7 @@ describe('bounded HackRF amplifier trials', () => {
 	});
 	it('retries once at reduced gain and holds the amp off after a second failure', () => {
 		const adjust = createHackRFGainAdjustment('sensitivity');
-		expect(adjust({ LNA: 32, VGA: 26, 'Amp (14dB)': 0 }, level(-25, -9)).gains).toEqual({ LNA: 0, VGA: 0, 'Amp (14dB)': 1 });
+		expect(adjust({ LNA: 32, VGA: 26, 'Amp (14dB)': 0 }, level(-25, -9)).gains).toEqual({ LNA: 40, VGA: 2, 'Amp (14dB)': 1 });
 		const raised = { LNA: 24, VGA: 4, 'Amp (14dB)': 1 };
 		const reduced = adjust(raised, level(-12, -1, 0.01));
 		expect(reduced.gains['Amp (14dB)']).toBe(0);
@@ -308,14 +332,127 @@ it('uses the bounded amp retry policy through the one-shot receiver lifecycle', 
 	expect(app.autoGain.status).toContain('Amp kept off after repeated overload');
 });
 
-it('raises gain gradually from minimum after enabling the amp, using fresh measurements', () => {
+it('raises gain gradually from the staged level after enabling the amp, using fresh measurements', () => {
 	const adjust = createHackRFGainAdjustment('sensitivity');
 	let current = adjust({ LNA: 32, VGA: 26, 'Amp (14dB)': 0 }, level(-25, -9)).gains;
-	expect(current).toEqual({ LNA: 0, VGA: 0, 'Amp (14dB)': 1 });
+	expect(current).toEqual({ LNA: 40, VGA: 2, 'Amp (14dB)': 1 });
 	for (let step = 0; step < 10; step++) {
 		const next = adjust(current, level(-45, -20));
 		expect(next.gains['Amp (14dB)']).toBe(1);
 		expect(hackrfGainTotal(next.gains) - hackrfGainTotal(current)).toBe(2);
 		current = next.gains;
 	}
+});
+
+describe('continuous auto gain', () => {
+	function loopApp(readLevel) {
+		const app = appWithLevel(readLevel);
+		Object.assign(app.autoGain, { enabled: true, target: 50, allowAmp: false, overload: false, cancelled: false });
+		app.autoGainSupported = () => true;
+		app.sweepMode = () => false;
+		return app;
+	}
+	it('keeps raising gain for a weak band, holds when settled and never uses the amp unless allowed', async () => {
+		let gainTotal = 32;
+		const app = loopApp(() => ({ ...level(-60 + (gainTotal - 32), -40 + (gainTotal - 32)), started: Date.now() }));
+		app.backend.setGain.mockImplementation(async () => {
+			gainTotal = app.gains.LNA + app.gains.VGA;
+		});
+		const loop = app.runAutoGainLoop();
+		await vi.advanceTimersByTimeAsync(30000);
+		expect(app.gains.LNA + app.gains.VGA).toBeGreaterThan(50);
+		expect(app.gains['Amp (14dB)']).toBe(0);
+		expect(app.autoGain.status).toMatch(/Locked|Gain limit/);
+		app.autoGain.enabled = false;
+		await vi.advanceTimersByTimeAsync(1000);
+		await loop;
+		expect(app._autoGainLoop).toBeNull();
+		expect(app.autoGain.status).toBe('');
+	});
+	it('settles and stops changing gain on a strong, bursty signal', async () => {
+		let total = 32;
+		let seed = 1;
+		const random = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+		const app = loopApp(() => {
+			const rms = -38 + (total - 32);
+			// Bursts clip now and then once the peaks come near full scale.
+			const clipped = rms > -28 && random() < 0.3;
+			return { ...level(rms, clipped ? -0.5 : rms + 10, clipped ? 0.01 : 0), started: Date.now() };
+		});
+		app.backend.setGain.mockImplementation(async () => {
+			total = app.gains.LNA + app.gains.VGA;
+		});
+		void app.runAutoGainLoop();
+		await vi.advanceTimersByTimeAsync(30000);
+		const writes = app.backend.setGain.mock.calls.length;
+		// The old one-reading logic made over 100 gain writes here; now it only probes again after a minute, then after two.
+		await vi.advanceTimersByTimeAsync(180000);
+		expect(app.backend.setGain.mock.calls.length - writes).toBeLessThanOrEqual(20);
+		expect(app.gains.LNA).toBe(16);
+		app.autoGain.enabled = false;
+		await vi.advanceTimersByTimeAsync(1000);
+	});
+	it('on a burst steps down 2 dB a second, then climbs back in small steps to just under the overload', async () => {
+		const app = loopApp(() => level(-40, -20));
+		app.gains.VGA = 30;
+		let burst = true;
+		app.backend.getRxLevel.mockImplementation(() =>
+			burst ? { ...level(-12, -1, 0.01), started: Date.now() } : { ...level(-40, -20), started: Date.now() },
+		);
+		void app.runAutoGainLoop();
+		const down = [];
+		for (let second = 0; second < 4; second++) {
+			await vi.advanceTimersByTimeAsync(1000);
+			down.push(app.gains.LNA + app.gains.VGA);
+		}
+		expect(down).toEqual([44, 42, 40, 38]);
+		burst = false;
+		const totals = [];
+		for (let second = 0; second < 15; second++) {
+			await vi.advanceTimersByTimeAsync(1000);
+			totals.push(app.gains.LNA + app.gains.VGA);
+		}
+		for (let i = 1; i < totals.length; i++) expect(totals[i] - totals[i - 1]).toBeLessThanOrEqual(2);
+		expect(totals.at(-1)).toBe(44);
+		expect(app.autoGain.status).toContain('Holding below the last overload');
+		app.autoGain.enabled = false;
+		await vi.advanceTimersByTimeAsync(1000);
+	});
+	it('falls back to the last locked gain on overload', async () => {
+		let reading = level(-24, -14);
+		const app = loopApp(() => ({ ...reading, started: Date.now() }));
+		void app.runAutoGainLoop();
+		await vi.advanceTimersByTimeAsync(1000);
+		expect(app.autoGain.status).toContain('Locked');
+		app.gains.VGA = 40; // e.g. raised while the band was quiet
+		app._gainsFromCode = true;
+		reading = level(-12, -1, 0.01);
+		await vi.advanceTimersByTimeAsync(600);
+		expect(app.gains).toMatchObject({ LNA: 16, VGA: 16 });
+		app.autoGain.enabled = false;
+		await vi.advanceTimersByTimeAsync(1000);
+	});
+	it('drops gain at once and flags overload', async () => {
+		const app = loopApp(() => ({ ...level(-12, -1, 0.01), started: Date.now() }));
+		void app.runAutoGainLoop();
+		await vi.advanceTimersByTimeAsync(1000);
+		expect(app.gains.LNA + app.gains.VGA).toBeLessThan(32);
+		expect(app.autoGain.overload).toBe(true);
+		app.autoGain.enabled = false;
+		await vi.advanceTimersByTimeAsync(1000);
+	});
+});
+
+it('groups frequencies into FPV bands for remembered gains', () => {
+	expect(gainBand(5740)).toBe('5.8G');
+	expect(gainBand(2440)).toBe('2.4G');
+	expect(gainBand(868)).toBe('900M');
+	expect(gainBand(433.92)).toBe('400M');
+});
+
+it('marks gain changes with a bright tick at both waterfall edges', () => {
+	const row = withGainMarker(new Float32Array(1000).fill(-100), -40);
+	expect(row[0]).toBe(-20);
+	expect(row[999]).toBe(-20);
+	expect(row[500]).toBe(-100);
 });

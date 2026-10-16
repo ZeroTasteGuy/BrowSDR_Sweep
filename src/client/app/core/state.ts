@@ -59,13 +59,9 @@ export function createAppData() {
 		},
 		gains: {} as Record<string, number>,
 		gainDeviceType: '',
-		autoGain: {
-			mode: 'balanced' as AutoGainMode,
-			active: false,
-			cancelled: false,
-			status: '',
-			level: null as RxLevel | null,
-		},
+		autoGain: createAutoGainState(),
+		/** Last gains used in each band, keyed by device type and band. */
+		gainsByBand: {} as Record<string, Record<string, number>>,
 		deviceCapabilities: null as DeviceCapabilities | null,
 		locks: {
 			centerFreq: false,
@@ -247,5 +243,22 @@ function createBookmarkState() {
 			vfos: [] as Vfo[],
 			activeVfoIndex: 0,
 		},
+	};
+}
+
+function createAutoGainState() {
+	return {
+		mode: 'balanced' as AutoGainMode,
+		active: false,
+		cancelled: false,
+		status: '',
+		level: null as RxLevel | null,
+		/** Keep adjusting in the background while reception runs. */
+		enabled: false,
+		/** 0 = weak signals (more gain), 100 = strong signals (more headroom). */
+		target: 50,
+		/** Let auto gain switch the HackRF RF amp on. Off near transmitters. */
+		allowAmp: false,
+		overload: false,
 	};
 }

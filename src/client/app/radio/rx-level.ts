@@ -1,4 +1,4 @@
-import { defineComponent, inject, onUnmounted, ref, watch } from 'vue';
+import { computed, defineComponent, inject, onUnmounted, ref, watch } from 'vue';
 import type { AppInstance } from '@/app/core/receiver.types';
 import type { RxLevel } from '@/radio/types';
 
@@ -7,15 +7,13 @@ export default defineComponent({
 	name: 'RxLevel',
 	template: `<div v-if="supported" class="rx-level" aria-label="RX level">
 		<template v-if="level">
-			<div>RX peak {{ Math.min(100, 100 * Math.pow(10, level.peakDbfs / 20)).toFixed(0) }}%
-				· {{ level.peakDbfs.toFixed(1) }} dBFS</div>
-			<div>RMS {{ level.rmsDbfs.toFixed(1) }} dBFS
-				· Near-clipped {{ (level.clippedFraction * 100).toFixed(3) }}%</div>
-			<div :class="{ 'rx-level-warning': level.clippedFraction > 0.0001 || level.peakDbfs > -3 }">
-				{{ level.clippedFraction > 0.0001 || level.peakDbfs > -3 ? 'ADC overload / low headroom — reduce gain' : 'ADC headroom available' }}</div>
+			<div class="rx-level-bar" role="meter" aria-label="ADC peak level" :aria-valuenow="level.peakDbfs.toFixed(1)" aria-valuemin="-50" aria-valuemax="0">
+				<div class="rx-level-fill" :class="zone" :style="{ width: barWidth + '%' }"></div>
+				<div class="rx-level-limit" title="Overload line, -3 dBFS"></div>
+			</div>
+			<div :class="{ 'rx-level-warning': overloaded }">{{ overloaded ? 'Overload: reduce gain' : 'Peak ' + level.peakDbfs.toFixed(0) + ' dBFS · RMS ' + level.rmsDbfs.toFixed(0) + ' dBFS' }}</div>
 		</template>
 		<div v-else>{{ receiver.running ? 'RX level: waiting for samples' : 'RX level: reception stopped' }}</div>
-		<div class="rx-level-hint">Sampled I/Q levels; not an RF input safety meter.</div>
 	</div>`,
 	setup() {
 		const injected = inject<AppInstance>('receiver');
@@ -55,6 +53,10 @@ export default defineComponent({
 			generation++;
 			clearInterval(timer);
 		});
-		return { receiver, level, supported };
+		const overloaded = computed(() => !!level.value && (level.value.clippedFraction > 0.0001 || level.value.peakDbfs > -3));
+		// -50 dBFS is empty, 0 dBFS is full.
+		const barWidth = computed(() => (level.value ? Math.max(0, Math.min(100, ((level.value.peakDbfs + 50) / 50) * 100)) : 0));
+		const zone = computed(() => (overloaded.value ? 'red' : level.value && level.value.peakDbfs > -12 ? 'amber' : 'green'));
+		return { receiver, level, supported, overloaded, barWidth, zone };
 	},
 });
