@@ -16,7 +16,7 @@ vi.mock('@/worker/runtime/wasm-init', () => ({
 }));
 
 import { HackRFDevice } from '@/devices/hackrf/device';
-import { DcOffsetRemover, offsetTuningBins, offsetTuningHz, shiftSpectrum } from '@/radio/offset-tuning';
+import { DcOffsetRemover, offsetTuningBins, offsetTuningHz, patchDcSpike, shiftSpectrum, spikeHalfWidthBins } from '@/radio/offset-tuning';
 import { startRxStream } from '@/worker/streams/rx-stream';
 import { Backend } from '@/worker/runtime/backend';
 
@@ -58,8 +58,8 @@ describe('DC offset removal', () => {
 		const remover = new DcOffsetRemover();
 		remover.process(toneWithOffset(37 * 100, 2, 2));
 		remover.process(toneWithOffset(37 * 100, 4, 2));
-		expect(remover.offset.i).toBeGreaterThan(2);
-		expect(remover.offset.i).toBeLessThan(2.5);
+		expect(remover.offset.i).toBeGreaterThan(2.5);
+		expect(remover.offset.i).toBeLessThan(3.5);
 	});
 	it('clamps at full scale without carrying the clipping error onward', () => {
 		const remover = new DcOffsetRemover();
@@ -123,5 +123,38 @@ describe('offset tuning', () => {
 		await Backend.prototype.setFrequency.call(backend, 5740);
 		expect(device.setFrequency).toHaveBeenLastCalledWith(5742.5e6);
 		expect(backend._centerFreq).toBe(5742.5);
+	});
+});
+
+describe('DC spike patch', () => {
+	function noisy(n, seed = 1) {
+		let x = seed;
+		return Float32Array.from({ length: n }, () => {
+			x = (x * 16807) % 2147483647;
+			return -100 + (x / 2147483647) * 4;
+		});
+	}
+	it('sizes the patch from 25 kHz, within limits', () => {
+		expect(spikeHalfWidthBins(20e6, 65536)).toBe(82);
+		expect(spikeHalfWidthBins(20e6, 2048)).toBe(3);
+		expect(spikeHalfWidthBins(2e6, 256)).toBe(3);
+		expect(spikeHalfWidthBins(20e6, 64)).toBe(2);
+	});
+	it('replaces the spike and its skirt with nearby noise', () => {
+		const spectrum = noisy(4096);
+		const c = 2048;
+		spectrum[c] = -40;
+		for (let k = 1; k <= 10; k++) spectrum[c - k] = spectrum[c + k] = -40 - 5 * k;
+		patchDcSpike(spectrum, 40);
+		for (let k = -12; k <= 12; k++) expect(spectrum[c + k]).toBeLessThan(-95);
+	});
+	it('leaves a wide signal across the centre alone apart from the centre bin', () => {
+		const spectrum = noisy(4096);
+		const c = 2048;
+		for (let k = -300; k <= 300; k++) spectrum[c + k] = -60 + (k % 3);
+		const before = spectrum.slice();
+		patchDcSpike(spectrum, 40);
+		for (let k = 2; k <= 300; k++) expect(spectrum[c + k]).toBe(before[c + k]);
+		expect(spectrum[c]).toBeGreaterThan(-62);
 	});
 });

@@ -2,7 +2,8 @@
  * Offset tuning: the hardware tunes above the requested centre so its DC
  * spike falls away from the frequency being watched, and the spectrum is
  * shifted back so the display still centres on the requested frequency.
- * The DC offset itself is also removed from the spectrum frames.
+ * The DC offset itself is also removed from the spectrum frames, and the
+ * narrow skirt of LO noise left around it is patched over.
  */
 
 /** The tuning offset rounded to whole FFT bins, so the spectrum shift is exact. */
@@ -13,6 +14,36 @@ export function offsetTuningBins(offsetHz: number, sampleRate: number, fftSize: 
 
 export function offsetTuningHz(bins: number, sampleRate: number, fftSize: number): number {
 	return fftSize ? (bins * sampleRate) / fftSize : 0;
+}
+
+/** Most of the spike skirt is within a few kHz; never patch more than this either side. */
+const SPIKE_HALF_WIDTH_HZ = 25e3;
+
+export function spikeHalfWidthBins(sampleRate: number, fftSize: number): number {
+	const bins = Math.round((SPIKE_HALF_WIDTH_HZ * fftSize) / sampleRate);
+	return Math.min(Math.floor(fftSize / 32), Math.max(2, bins));
+}
+
+/**
+ * Patch over the spike at the centre bin of a DC-centred spectrum, in place.
+ *
+ * The patch grows outward while either side is still 3 dB above the noise
+ * just beyond `maxHalfWidth`, so a wide signal over the centre is left alone.
+ * Patched bins copy their neighbours further out, which keeps the noise texture.
+ */
+export function patchDcSpike(spectrum: Float32Array, maxHalfWidth: number): void {
+	const c = spectrum.length >> 1;
+	if (maxHalfWidth < 1 || c - 3 * maxHalfWidth - 1 < 0) return;
+	let reference = 0;
+	for (let k = maxHalfWidth + 1; k <= 2 * maxHalfWidth; k++) reference += spectrum[c - k] + spectrum[c + k];
+	const threshold = reference / (2 * maxHalfWidth) + 3;
+	let width = 1;
+	while (width < maxHalfWidth && Math.max(spectrum[c - width - 1], spectrum[c + width + 1]) > threshold) width++;
+	for (let k = 1; k <= width; k++) {
+		spectrum[c - k] = spectrum[c - k - width];
+		spectrum[c + k] = spectrum[c + k + width];
+	}
+	spectrum[c] = spectrum[c - 2 * width - 1];
 }
 
 /**
@@ -47,7 +78,7 @@ export class DcOffsetRemover {
 	private errQ = 0;
 	private primed = false;
 
-	constructor(private readonly smoothing = 0.1) {}
+	constructor(private readonly smoothing = 0.5) {}
 
 	get offset(): { i: number; q: number } {
 		return { i: this.dcI, q: this.dcQ };

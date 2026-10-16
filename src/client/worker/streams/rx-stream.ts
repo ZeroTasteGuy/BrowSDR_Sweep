@@ -47,7 +47,7 @@ import type { Backend } from '@/worker/runtime/backend';
 import type { SdrDevice } from '@/radio/types';
 import { displayToDeviceFrequencyHz } from '@/radio/frequency-shift';
 import { spectrumSmoothingAlpha } from '@/display/spectrum-rate';
-import { DcOffsetRemover, offsetTuningBins, offsetTuningHz, shiftSpectrum } from '@/radio/offset-tuning';
+import { DcOffsetRemover, offsetTuningBins, offsetTuningHz, patchDcSpike, shiftSpectrum, spikeHalfWidthBins } from '@/radio/offset-tuning';
 
 let _streamStarting = false;
 
@@ -193,7 +193,8 @@ async function tuneWithOffset(backend: Backend, device: SdrDevice, opts: RxStrea
 	await device.setSampleRate(sampleRate);
 	await device.setFrequency(displayToDeviceFrequencyHz(centerFreq, opts.frequencyShift ?? 0));
 	const dc = offsetBins ? new DcOffsetRemover() : null;
-	return { tunedOpts: { ...opts, centerFreq }, offset: { bins: offsetBins, dc } };
+	const spikeHalfWidth = spikeHalfWidthBins(sampleRate, fftSize);
+	return { tunedOpts: { ...opts, centerFreq }, offset: { bins: offsetBins, dc, spikeHalfWidth } };
 }
 
 function initializeSpectrum(fftSize: number, backend: Backend) {
@@ -261,6 +262,7 @@ function processSpectrumChunk(
 						else specFlop = specCopy;
 					}
 
+					if (offset.dc) patchDcSpike(spectrumOutput, offset.spikeHalfWidth);
 					shiftSpectrum(spectrumOutput, specCopy, offset.bins);
 					useFlip = !useFlip;
 
