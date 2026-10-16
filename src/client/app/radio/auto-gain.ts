@@ -83,6 +83,8 @@ export const autoGainMethods = {
 		let adjustHackrf = createHackRFGainAdjustment(0.5, false);
 		let after = Date.now() + 150;
 		const governor = createGainGovernor();
+		/** The last gains that held steady, the first fallback on overload. */
+		const memory: { locked: Record<string, number> | null } = { locked: null };
 		this.autoGain.status = 'Measuring receiver level…';
 		try {
 			while (wanted()) {
@@ -95,19 +97,27 @@ export const autoGainMethods = {
 					settings = key;
 					adjustHackrf = createHackRFGainAdjustment(preference, this.autoGain.allowAmp);
 					governor.reset();
+					memory.locked = null;
 				}
 				if (tuning() !== tuned) {
 					// Readings taken before a retune describe the old band.
 					tuned = tuning();
 					after = Date.now() + 150;
 					governor.reset();
+					memory.locked = null;
 				}
 				const level = await this.backend.getRxLevel();
 				if (!wanted()) break;
 				if (!level || level.started < after || Date.now() - level.timestamp > 1000) continue;
 				this.autoGain.level = level;
 				this.autoGain.overload = receiverOverloaded(level);
-				const proposal = planLoopStep(this, level, isHackrf ? (gains) => adjustHackrf(gains as HackRFGains, level) : null, governor);
+				const proposal = planLoopStep(
+					this,
+					level,
+					isHackrf ? (gains) => adjustHackrf(gains as HackRFGains, level) : null,
+					governor,
+					memory,
+				);
 				if (!proposal) continue;
 				await applyLoopGains.call(this, isHackrf ? HACKRF_NAMES : LIME_NAMES, proposal, wanted);
 				after = Date.now() + 150;
@@ -259,6 +269,7 @@ function planLoopStep(
 	level: RxLevel,
 	adjustHackrf: ((gains: Record<string, number>) => GainStep) | null,
 	governor: ReturnType<typeof createGainGovernor>,
+	memory: { locked: Record<string, number> | null },
 ): Record<string, number> | null {
 	const isHackrf = !!adjustHackrf;
 	const current = pickGains(app, isHackrf ? HACKRF_NAMES : LIME_NAMES);
@@ -271,16 +282,36 @@ function planLoopStep(
 		return null;
 	}
 	const locked = `Locked · RMS ${level.rmsDbfs.toFixed(0)} dBFS`;
-	const proposal = isHackrf ? vgaFirst(current, next.gains) : next.gains;
+	const proposal = app.autoGain.overload
+		? overloadFallback(current, next.gains, memory.locked, total)
+		: isHackrf
+			? vgaFirst(current, next.gains)
+			: next.gains;
 	const ampChange = isHackrf && proposal['Amp (14dB)'] !== current['Amp (14dB)'];
 	// A change that only moves gain between stages is not worth a glitch in the waterfall.
 	if (next.done || (!ampChange && total(proposal) === total(current))) {
 		app.autoGain.status = next.done && next.reason !== 'Levels settled' ? next.reason : locked;
+		if (!app.autoGain.overload) memory.locked = current;
 		return null;
 	}
 	const decision = governor.decide(total(current), total(proposal), app.autoGain.overload);
 	app.autoGain.status = decision.act ? next.reason : `${locked} · ${decision.held}`;
 	return decision.act ? proposal : null;
+}
+
+/**
+ * On overload, fall back to the last gains that held steady, or when already
+ * at or below those, step down by 2 dB on the VGA (the amp goes off first).
+ */
+function overloadFallback(
+	current: Record<string, number>,
+	proposed: Record<string, number>,
+	locked: Record<string, number> | null,
+	total: (gains: Record<string, number>) => number,
+) {
+	if (locked && total(locked) < total(current)) return locked;
+	if (current['Amp (14dB)'] || current.VGA === undefined) return proposed;
+	return current.VGA >= 2 ? { ...current, VGA: current.VGA - 2 } : proposed;
 }
 
 /**

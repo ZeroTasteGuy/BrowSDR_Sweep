@@ -391,7 +391,7 @@ describe('continuous auto gain', () => {
 		app.autoGain.enabled = false;
 		await vi.advanceTimersByTimeAsync(1000);
 	});
-	it('cuts once for a burst, then climbs back in small steps to just under the gain that overloaded', async () => {
+	it('on a burst steps down 2 dB a second, then climbs back in small steps to just under the overload', async () => {
 		const app = loopApp(() => level(-40, -20));
 		app.gains.VGA = 30;
 		let burst = true;
@@ -399,9 +399,12 @@ describe('continuous auto gain', () => {
 			burst ? { ...level(-12, -1, 0.01), started: Date.now() } : { ...level(-40, -20), started: Date.now() },
 		);
 		void app.runAutoGainLoop();
-		await vi.advanceTimersByTimeAsync(1500);
-		// One 6 dB cut, not a slide to 0 while the burst lasts.
-		expect(app.gains.LNA + app.gains.VGA).toBe(40);
+		const down = [];
+		for (let second = 0; second < 4; second++) {
+			await vi.advanceTimersByTimeAsync(1000);
+			down.push(app.gains.LNA + app.gains.VGA);
+		}
+		expect(down).toEqual([44, 42, 40, 38]);
 		burst = false;
 		const totals = [];
 		for (let second = 0; second < 15; second++) {
@@ -411,6 +414,20 @@ describe('continuous auto gain', () => {
 		for (let i = 1; i < totals.length; i++) expect(totals[i] - totals[i - 1]).toBeLessThanOrEqual(2);
 		expect(totals.at(-1)).toBe(44);
 		expect(app.autoGain.status).toContain('Holding below the last overload');
+		app.autoGain.enabled = false;
+		await vi.advanceTimersByTimeAsync(1000);
+	});
+	it('falls back to the last locked gain on overload', async () => {
+		let reading = level(-24, -14);
+		const app = loopApp(() => ({ ...reading, started: Date.now() }));
+		void app.runAutoGainLoop();
+		await vi.advanceTimersByTimeAsync(1000);
+		expect(app.autoGain.status).toContain('Locked');
+		app.gains.VGA = 40; // e.g. raised while the band was quiet
+		app._gainsFromCode = true;
+		reading = level(-12, -1, 0.01);
+		await vi.advanceTimersByTimeAsync(600);
+		expect(app.gains).toMatchObject({ LNA: 16, VGA: 16 });
 		app.autoGain.enabled = false;
 		await vi.advanceTimersByTimeAsync(1000);
 	});

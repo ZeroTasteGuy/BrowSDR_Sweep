@@ -4,9 +4,8 @@ import type { GainDecision } from './types';
  * Decides when a continuous auto gain loop may act on a proposed gain change,
  * so a strong, bursty signal does not set the gain hunting up and down.
  *
- * - Overload cuts once, and the gain that overloaded becomes a ceiling that
- *   is not climbed back past for a while. Further overload readings during
- *   the same burst are ignored, so one burst cannot walk the gain down to 0.
+ * - Overload steps down at most once a second, and the gain that first
+ *   overloaded becomes a ceiling that is not climbed back past for a while.
  * - Raising gain needs several readings in a row asking for it.
  * - Lowering gain for headroom (without overload) needs two in a row.
  */
@@ -18,8 +17,8 @@ const CEILING_HOLD_MS = 60_000;
 const CEILING_HOLD_MAX_MS = 600_000;
 /** Stay this far below the gain that last overloaded. */
 const CEILING_MARGIN_DB = 2;
-/** After an overload cut, let the burst pass before reacting to overload again. */
-const OVERLOAD_COOLDOWN_MS = 2_000;
+/** Between overload steps, let the last change show up in the readings. */
+const OVERLOAD_COOLDOWN_MS = 1_000;
 
 export function createGainGovernor() {
 	let raise = 0;
@@ -33,10 +32,12 @@ export function createGainGovernor() {
 			if (now >= ceilingUntil) ceiling = Infinity;
 			if (overloaded) {
 				raise = lower = 0;
-				if (now < cooldownUntil) return { act: false, held: 'Waiting for the overload burst to pass' };
+				if (now < cooldownUntil) return { act: false, held: 'Waiting to see the last step' };
 				// Overloading again after a ceiling expired: the signal is still there, so hold longer.
-				if (ceiling === Infinity && ceilingUntil) hold = Math.min(CEILING_HOLD_MAX_MS, hold * 2);
-				ceiling = current - CEILING_MARGIN_DB;
+				if (ceiling === Infinity) {
+					if (ceilingUntil) hold = Math.min(CEILING_HOLD_MAX_MS, hold * 2);
+					ceiling = current - CEILING_MARGIN_DB;
+				}
 				ceilingUntil = now + hold;
 				cooldownUntil = now + OVERLOAD_COOLDOWN_MS;
 				return { act: true };
