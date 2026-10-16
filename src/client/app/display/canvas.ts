@@ -98,18 +98,9 @@ export const canvasMethods = {
 		const w = ctx.canvas.width / dpr;
 		const h = ctx.canvas.height / dpr;
 
-		ctx.fillStyle = 'rgba(0, 0, 0, 1)';
+		ctx.fillStyle = '#05070a';
 		ctx.fillRect(0, 0, w, h);
-
-		// Grid
-		ctx.strokeStyle = 'rgba(255, 255, 255, 0.15)';
-		ctx.lineWidth = 1;
-		ctx.beginPath();
-		for (const p of [0.25, 0.5, 0.75]) {
-			ctx.moveTo(w * p, 0);
-			ctx.lineTo(w * p, h);
-		}
-		ctx.stroke();
+		drawGrid(ctx, w, h, range);
 
 		// Spectrum Data
 		ctx.save();
@@ -147,21 +138,56 @@ export const canvasMethods = {
 				ctx.lineTo(x, y);
 			}
 		}
-		// Draw SDR++ style primary trace (white / light blue depending on theme, using an SDR++-like color)
-		ctx.strokeStyle = 'rgba(255, 255, 255, 0.8)';
+		ctx.strokeStyle = 'rgba(214, 232, 255, 0.9)';
 		ctx.lineWidth = 1.0;
 		ctx.stroke();
 
-		// Fill under spectrum for the shadow trace like SDR++
+		// Fill under the trace: pale at the top fading to deep blue at the floor.
 		ctx.lineTo(w, h);
 		ctx.lineTo(0, h);
-		ctx.fillStyle = 'rgba(255, 255, 255, 0.2)';
+		ctx.fillStyle = spectrumFill(ctx, h);
 		ctx.fill();
 		ctx.restore();
 
 		drawOverlays.call(this, w, h, range);
 	},
 };
+
+let fillCache: { ctx: CanvasRenderingContext2D; h: number; gradient: CanvasGradient } | undefined;
+function spectrumFill(ctx: CanvasRenderingContext2D, h: number) {
+	if (fillCache?.ctx === ctx && fillCache.h === h) return fillCache.gradient;
+	const gradient = ctx.createLinearGradient(0, 0, 0, h);
+	gradient.addColorStop(0, 'rgba(200, 220, 240, 0.85)');
+	gradient.addColorStop(0.35, 'rgba(61, 155, 255, 0.75)');
+	gradient.addColorStop(0.75, 'rgba(24, 70, 160, 0.55)');
+	gradient.addColorStop(1, 'rgba(10, 20, 70, 0.4)');
+	fillCache = { ctx, h, gradient };
+	return gradient;
+}
+
+/** Faint vertical quarters plus a horizontal line and label every 10 dB. */
+function drawGrid(ctx: CanvasRenderingContext2D, w: number, h: number, range: { minDB: number; maxDB: number }) {
+	ctx.strokeStyle = 'rgba(255, 255, 255, 0.07)';
+	ctx.lineWidth = 1;
+	ctx.beginPath();
+	for (const p of [0.25, 0.5, 0.75]) {
+		ctx.moveTo(Math.round(w * p) + 0.5, 0);
+		ctx.lineTo(Math.round(w * p) + 0.5, h);
+	}
+	const span = range.maxDB - range.minDB;
+	const stepDb = span > 120 ? 20 : span > 50 ? 10 : 5;
+	const labels: Array<[number, number]> = [];
+	for (let db = Math.ceil(range.minDB / stepDb) * stepDb; db <= range.maxDB; db += stepDb) {
+		const y = Math.round(h - ((db - range.minDB) / span) * h) + 0.5;
+		ctx.moveTo(0, y);
+		ctx.lineTo(w, y);
+		labels.push([db, y]);
+	}
+	ctx.stroke();
+	ctx.fillStyle = 'rgba(160, 172, 186, 0.75)';
+	ctx.font = '10px Inter, system-ui, sans-serif';
+	for (const [db, y] of labels) if (y > 12 && y < h - 22) ctx.fillText(String(db), 4, y - 3);
+}
 
 /** Sweep mode shows its own overlays (channels, peak hold, peak markers) instead of VFO and discovery markers. */
 function drawOverlays(this: AppInstance, w: number, h: number, range: { minDB: number; maxDB: number }) {
@@ -252,15 +278,37 @@ function renderWaterfallFrame(this: AppInstance, data: Float32Array<ArrayBufferL
 	// Waterfall drawing — skip adding a new history row when this is just a zoom repaint
 	if (!this._zoomRepaint) {
 		const step = this._waterfallClock.advance(now);
+		wfData = smoothWaterfallRow(this, wfData);
 		if (this._gainMarkerPending) {
 			this._gainMarkerPending = false;
-			wfData = withGainMarker(wfData === data ? data.slice() : wfData, this.display.maxDB);
+			wfData = withGainMarker(wfData === data || wfData === this._waterfallSmoothed ? wfData.slice() : wfData, this.display.maxDB);
 		}
 		this._waterfallEngine.renderLine(wfData, step.rows, step.fraction);
 	} else if (this._waterfallEngine.render) {
 		// For a zoom-only repaint, just redraw the existing texture at the new zoom
 		this._waterfallEngine.render();
 	}
+}
+
+/**
+ * Exponential average over time, in dB, so noise settles into an even floor.
+ * Returns the input untouched when smoothing is off.
+ */
+export function smoothWaterfallRow(app: AppInstance, row: Float32Array<ArrayBufferLike>): Float32Array<ArrayBufferLike> {
+	const amount = app.display.waterfallSmoothing;
+	if (!(amount > 0)) {
+		app._waterfallSmoothed = undefined;
+		return row;
+	}
+	const average = app._waterfallSmoothed;
+	if (!average || average.length !== row.length) {
+		app._waterfallSmoothed = row.slice();
+		return app._waterfallSmoothed;
+	}
+	const keep = Math.min(amount, 0.95);
+	const take = 1 - keep;
+	for (let i = 0; i < row.length; i++) average[i] = average[i] * keep + row[i] * take;
+	return average;
 }
 
 /** A bright tick at both edges of the waterfall row where auto gain changed the gain. */
@@ -323,8 +371,12 @@ export function mountCanvas(this: AppInstance) {
 		}, 150);
 	};
 	window.addEventListener('resize', resize);
+	// The plot also changes size when the sidebar folds or the splitter moves.
+	const observer = typeof ResizeObserver === 'undefined' ? undefined : new ResizeObserver(resize);
+	observer?.observe(this.$refs.fftContainer);
 	this._canvasCleanup = () => {
 		clearTimeout(resizeTimer);
+		observer?.disconnect();
 		window.removeEventListener('resize', resize);
 		document.body.removeEventListener('click', resumeAudio);
 		document.body.removeEventListener('touchstart', resumeAudio);

@@ -40,6 +40,8 @@ import AdsbPanel from './decoders/adsb/panel';
 import { adsbMethods } from './decoders/adsb';
 import { rtl433Methods } from './decoders/rtl433';
 import HeaderTools from './workspace/receiver-tools';
+import HeaderStatus from './core/header-status';
+import ViewSliders from './display/view-sliders';
 import DiscoveryPanel from './discovery/panel';
 import * as uiComponents from '@/ui';
 import { coreCapabilityIssues } from '@/platform/browser-capabilities';
@@ -65,6 +67,8 @@ const Receiver = {
 		BlePanel,
 		AcarsPanel,
 		HeaderTools,
+		HeaderStatus,
+		ViewSliders,
 		DiscoveryPanel,
 	},
 	provide(this: AppInstance) {
@@ -240,6 +244,11 @@ function watchReceiverSettings(this: AppInstance) {
 		(enabled: boolean) => {
 			this.backend?.setWhisperEnabled(enabled).catch(console.error);
 		},
+	);
+
+	this.$watch(
+		() => [this.display.waterfallSmoothing, this.display.spectrumSplit],
+		() => this.saveSetting(),
 	);
 
 	this.$watch(

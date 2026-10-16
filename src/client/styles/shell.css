@@ -1,0 +1,338 @@
+/* ========================================
+   SHELL: header, sidebar sections, plot and side sliders.
+   Loaded after responsive.css so it sets the look on every screen size.
+   ======================================== */
+
+/* ── Header ── */
+.top-bar {
+	height: 52px;
+	gap: 10px;
+	padding: 0 12px;
+	background: var(--bg-panel);
+}
+
+.sidebar-toggle {
+	display: flex;
+	flex-shrink: 0;
+	border: 1px solid var(--border);
+	background: var(--bg-raised);
+	border-radius: 6px;
+	padding: 5px 8px;
+}
+
+.run-btn {
+	flex-shrink: 0;
+	width: 40px;
+	height: 34px;
+	border-radius: 6px;
+	border: 1px solid var(--border);
+	background: var(--bg-raised);
+	color: var(--text-main);
+}
+.run-btn.active {
+	background: #3a1717;
+	border-color: #6a2a2a;
+	color: #ffb3b3;
+}
+.run-btn:not(:disabled):not(.active) {
+	color: var(--good);
+}
+
+.vfo-displays {
+	padding: 0;
+	gap: 10px;
+	align-items: baseline;
+	margin-right: 0;
+	flex: 1;
+}
+
+.big-freq {
+	font:
+		600 26px/1 ui-monospace,
+		'SF Mono',
+		Menlo,
+		Consolas,
+		monospace;
+	font-variant-numeric: tabular-nums;
+	letter-spacing: 0.04em;
+	color: var(--text-main);
+	white-space: nowrap;
+}
+.big-freq-unit {
+	font-size: 13px;
+	font-weight: 400;
+	color: var(--text-muted);
+	margin-left: 6px;
+	letter-spacing: 0;
+}
+.freq-span {
+	color: var(--text-muted);
+	font-size: 12px;
+	white-space: nowrap;
+}
+
+.status-pills {
+	display: flex;
+	gap: 6px;
+	flex-wrap: nowrap;
+	overflow: hidden;
+	flex-shrink: 1;
+	min-width: 0;
+}
+.pill {
+	display: inline-flex;
+	align-items: center;
+	padding: 3px 9px;
+	border-radius: 999px;
+	background: var(--bg-raised);
+	border: 1px solid var(--border);
+	font-size: 12px;
+	white-space: nowrap;
+	color: var(--text-muted);
+	max-width: 180px;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+.pill.good {
+	color: var(--good);
+	border-color: #1f4d3a;
+}
+.pill.warn {
+	color: var(--warn);
+	border-color: #5a4518;
+}
+.pill.bad {
+	color: var(--bad);
+	border-color: #5a2323;
+}
+
+.top-controls .icon-btn {
+	color: var(--text-muted);
+}
+.top-controls .icon-btn:hover:not(:disabled) {
+	color: var(--text-main);
+}
+.top-controls .icon-btn.active {
+	color: var(--warn);
+}
+
+/* ── Sidebar ── */
+.sidebar {
+	width: 312px;
+	min-width: 312px;
+	background: var(--bg-panel);
+}
+.sidebar.sidebar-collapsed {
+	display: none;
+}
+
+/* Top-level sections read like w1700k's <details>: a bold title with a small triangle, no grey bar. */
+.sidebar-scroll > .panel {
+	border-bottom: 1px solid var(--border);
+}
+.sidebar-scroll > .panel > .panel-header {
+	background: transparent;
+	border-bottom: 0;
+	padding: 11px 12px;
+	font-size: 13px;
+	font-weight: 600;
+	letter-spacing: 0.02em;
+	text-transform: none;
+	color: var(--text-main);
+	justify-content: flex-start;
+	gap: 8px;
+}
+.sidebar-scroll > .panel > .panel-header:hover {
+	background: var(--bg-raised);
+	color: var(--text-main);
+}
+.sidebar-scroll > .panel > .panel-header > .panel-chevron {
+	order: -1;
+	opacity: 0.8;
+}
+.sidebar-scroll > .panel > .panel-body {
+	padding: 2px 12px 14px;
+	gap: 10px;
+}
+
+.panel-body .panel {
+	border-color: var(--border);
+	background: rgba(255, 255, 255, 0.01);
+}
+
+.form-row label {
+	color: var(--text-muted);
+}
+
+/* Inputs and buttons: one quiet surface everywhere. */
+.input-group,
+select,
+.spin-group {
+	background: var(--bg-input);
+	border-color: var(--border);
+	border-radius: 5px;
+}
+select {
+	padding: 5px 8px;
+}
+.input-group:focus-within,
+select:focus-visible {
+	border-color: var(--accent);
+}
+input[type='range'] {
+	accent-color: var(--accent);
+}
+
+.btn,
+.ui-button {
+	border-radius: 6px;
+}
+.btn {
+	background: var(--btn-bg);
+	border-color: var(--border);
+}
+.btn-primary {
+	background: var(--accent-soft);
+	border-color: var(--accent);
+	color: #cfe6ff;
+}
+.btn-primary:hover:not(:disabled) {
+	background: #1d4170;
+}
+
+.sidebar-footer {
+	display: flex;
+	align-items: center;
+	gap: 4px;
+}
+.sidebar-footer .sidebar-about-btn {
+	flex: 1;
+}
+
+/* ── Plot ── */
+.plot {
+	flex: 1;
+	display: flex;
+	min-width: 0;
+	min-height: 0;
+}
+.plot > .workspace {
+	flex: 1;
+	min-width: 0;
+	display: flex;
+	flex-direction: column;
+	background: #05070a;
+}
+.fft-container {
+	flex: none;
+	border-bottom: 1px solid var(--border);
+}
+.waterfall-container {
+	flex: 1;
+	min-height: 0;
+	height: auto;
+	position: relative;
+}
+.waterfall-container > canvas {
+	position: absolute;
+	inset: 0;
+}
+
+.plot-splitter {
+	position: absolute;
+	left: 0;
+	right: 0;
+	height: 10px;
+	margin-top: -5px;
+	cursor: row-resize;
+	z-index: 3;
+	touch-action: none;
+}
+.plot-splitter:hover {
+	background: linear-gradient(transparent 4px, rgba(61, 155, 255, 0.5) 4px, rgba(61, 155, 255, 0.5) 6px, transparent 6px);
+}
+
+.tick {
+	background: rgba(7, 9, 12, 0.8);
+	color: #a0acba;
+	font-family: ui-monospace, Menlo, Consolas, monospace;
+}
+
+.hover-tick {
+	color: #cfe6ff;
+	border-color: var(--accent);
+	background: rgba(7, 9, 12, 0.9);
+}
+
+/* ── Side sliders ── */
+.view-sliders {
+	width: 52px;
+	flex: none;
+	display: flex;
+	flex-direction: column;
+	background: var(--bg-panel);
+	border-left: 1px solid var(--border);
+	padding: 6px 0;
+}
+.view-sliders label {
+	flex: 1;
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 2px;
+	min-height: 0;
+	font-size: 10px;
+	color: var(--text-muted);
+	cursor: default;
+}
+.view-sliders output {
+	font-size: 10px;
+	font-variant-numeric: tabular-nums;
+	color: var(--text-main);
+}
+.view-sliders input.vertical {
+	writing-mode: vertical-lr;
+	direction: rtl;
+	flex: 1;
+	width: 20px;
+	min-height: 40px;
+	accent-color: var(--accent);
+}
+
+/* ── Narrow screens ── */
+@media (max-width: 768px) {
+	.top-bar {
+		height: 48px;
+		gap: 6px;
+		padding: 0 8px;
+	}
+	/* VFOs move to the bottom strip on phones, but the centre or sweep range stays in the header. */
+	.vfo-displays:has(.big-freq) {
+		display: flex;
+		min-width: 0;
+		overflow: hidden;
+	}
+	.big-freq {
+		font-size: 17px;
+	}
+	.big-freq-unit {
+		display: none;
+	}
+	.freq-span,
+	.status-pills .pill:not(.bad) {
+		display: none;
+	}
+	.sidebar.sidebar-collapsed {
+		display: flex;
+	}
+	.view-sliders {
+		width: 40px;
+	}
+	.view-sliders label {
+		font-size: 9px;
+	}
+}
+
+.contrast-buttons {
+	gap: 8px;
+}

@@ -8,6 +8,8 @@ export interface ViewState {
 export interface DisplayState {
 	spectrumFps: number;
 	sharedChannelization: boolean;
+	waterfallSmoothing: number;
+	spectrumSplit: number;
 	minDB: number;
 	maxDB: number;
 }

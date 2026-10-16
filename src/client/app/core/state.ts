@@ -55,6 +55,10 @@ export function createAppData() {
 			spectrumFps: 20,
 			highResolutionWaterfall: true,
 			sharedChannelization: true,
+			/** 0 shows each waterfall line as measured; up to 0.95 averages it with the lines before. */
+			waterfallSmoothing: 0,
+			/** Share of the plot height the spectrum takes, in percent. */
+			spectrumSplit: 45,
 			...DEFAULT_SPECTRUM_RANGE,
 		},
 		gains: {} as Record<string, number>,
@@ -107,7 +111,7 @@ export function createAppData() {
 		},
 		sidebarOpen: false,
 		showAbout: false,
-		collapsedPanels: {} as Record<string, boolean>,
+		collapsedPanels: { bookmarks: true } as Record<string, boolean>,
 		vfoConflictDialog: {
 			show: false,
 			vfoIndex: -1,

@@ -1,14 +1,23 @@
 :root {
-	--bg-dark: #121212;
-	--bg-panel: #1e1e1e;
-	--bg-header: #2c2c2c;
-	--text-main: #e0e0e0;
-	--text-muted: #888888;
-	--accent: #3a86ff;
-	--accent-hover: #5396ff;
-	--border: #333333;
-	--btn-bg: #2a2a2a;
-	--btn-hover: #3a3a3a;
+	/* Dark, low-glare palette after w1700k-sdr. */
+	--bg-dark: #07090c;
+	--bg-panel: #12161b;
+	--bg-header: #12161b;
+	--bg-raised: #181d24;
+	--bg-input: #07090c;
+	--text-main: #d9dfe7;
+	--text-muted: #8994a1;
+	--text-dim: #8994a1;
+	--accent: #3d9bff;
+	--accent-hover: #5aaaff;
+	--accent-soft: #173352;
+	--good: #3ecf8e;
+	--warn: #f5b041;
+	--bad: #ff6b6b;
+	--border: #262e38;
+	--btn-bg: #181d24;
+	--btn-hover: #1f2731;
+	color-scheme: dark;
 }
 
 * {
@@ -16,7 +25,7 @@
 	margin: 0;
 	padding: 0;
 	scrollbar-width: thin;
-	scrollbar-color: #444 #1a1a1a;
+	scrollbar-color: #2c3540 transparent;
 }
 
 *::-webkit-scrollbar {
@@ -43,10 +52,13 @@
 
 body {
 	font-family:
-		'Inter',
+		system-ui,
 		-apple-system,
-		BlinkMacSystemFont,
+		'Segoe UI',
+		Roboto,
+		'Inter',
 		sans-serif;
+	font-size: 13px;
 	background-color: var(--bg-dark);
 	color: var(--text-main);
 	overflow: hidden;

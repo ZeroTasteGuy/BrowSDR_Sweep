@@ -62,7 +62,7 @@ describe('receiver uses the shared UI', () => {
 		expect(wrapper.find('.vfo-bottom-strip').exists()).toBe(false);
 		expect(wrapper.text()).not.toContain('Add VFO');
 		expect(wrapper.text()).not.toContain('Shared VFO DSP');
-		expect(wrapper.get('.vfo-displays').text()).toBe('5800 MHz');
+		expect(wrapper.get('.big-freq').text()).toBe('5800.000MHz');
 	});
 	it('defaults sweep to the 5.8 GHz FPV range on IMD8C, and moves older saved sweep choices to the new defaults once', () => {
 		const storage = new Map<string, string>();

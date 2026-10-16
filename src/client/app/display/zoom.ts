@@ -42,6 +42,27 @@ export const zoomMethods = {
 
 		this.applyZoomToEngine();
 	},
+	/** Drag the line between the spectrum and the waterfall. */
+	startSplitDrag(this: AppInstance, e: PointerEvent) {
+		const handle = e.currentTarget as HTMLElement;
+		const area = handle.parentElement;
+		if (!area) return;
+		e.preventDefault();
+		handle.setPointerCapture(e.pointerId);
+		const move = (event: PointerEvent) => {
+			const rect = area.getBoundingClientRect();
+			const percent = ((event.clientY - rect.top) / rect.height) * 100;
+			this.display.spectrumSplit = Math.round(Math.max(15, Math.min(85, percent)));
+		};
+		const end = () => {
+			handle.removeEventListener('pointermove', move);
+			handle.removeEventListener('pointerup', end);
+			handle.removeEventListener('pointercancel', end);
+		};
+		handle.addEventListener('pointermove', move);
+		handle.addEventListener('pointerup', end);
+		handle.addEventListener('pointercancel', end);
+	},
 	applyZoomToEngine(this: AppInstance) {
 		if (this._waterfallEngine) {
 			this._waterfallEngine.setZoom(this.view.zoomOffset, this.view.zoomScale);

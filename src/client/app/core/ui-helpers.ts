@@ -106,7 +106,12 @@ export const uiHelperMethods = {
 		}, 3000);
 	},
 	toggleSidebar(this: AppInstance) {
-		this.sidebarOpen = !this.sidebarOpen;
+		// Narrow screens slide the controls over the plot; wide screens fold them away.
+		if (narrowScreen()) this.sidebarOpen = !this.sidebarOpen;
+		else this.collapsedPanels['sidebar'] = !this.collapsedPanels['sidebar'];
+	},
+	sidebarShown(this: AppInstance) {
+		return narrowScreen() ? this.sidebarOpen : !this.collapsedPanels['sidebar'];
 	},
 	closeSidebar(this: AppInstance) {
 		this.sidebarOpen = false;
@@ -197,4 +202,9 @@ export function watchVfoSelection(this: AppInstance) {
 		{ flush: 'post' },
 	);
 	this.scrollSelectedVfoIntoView();
+}
+
+/** Matches the drawer breakpoint in responsive.css. */
+function narrowScreen() {
+	return window.matchMedia?.('(max-width: 768px)').matches ?? false;
 }

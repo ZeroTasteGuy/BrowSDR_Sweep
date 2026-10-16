@@ -92,6 +92,8 @@ export interface ReceiverInternals {
 	_gainsFromCode?: boolean;
 	/** Mark the next waterfall row: auto gain just changed the gain. */
 	_gainMarkerPending?: boolean;
+	/** Running average behind waterfall smoothing. */
+	_waterfallSmoothed?: Float32Array;
 	_hostRunning?: boolean;
 	_resumeAfterHostPause?: boolean;
 	_pendingImportFile: File | null;
@@ -115,6 +117,8 @@ export interface ReceiverMethods {
 	labelFreq(percent: number): string;
 	showMsg(msg: string): void;
 	toggleSidebar(): void;
+	sidebarShown(): boolean;
+	startSplitDrag(e: PointerEvent): void;
 	closeSidebar(): void;
 	unlockAndConnect(): void;
 	_initAudioCtx(): void;

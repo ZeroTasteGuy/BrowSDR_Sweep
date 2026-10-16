@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { mountCanvas } from '@/app/display/canvas';
+import { mountCanvas, smoothWaterfallRow } from '@/app/display/canvas';
 import type { AppInstance } from '@/app/core/receiver.types';
 
 describe('canvas mouse panning', () => {
@@ -48,5 +48,21 @@ describe('canvas mouse panning', () => {
 		} finally {
 			app._canvasCleanup();
 		}
+	});
+});
+
+describe('waterfall smoothing', () => {
+	it('passes rows through when off and averages them over time when on', () => {
+		const app = { display: { waterfallSmoothing: 0 } } as unknown as AppInstance;
+		const row = new Float32Array([-100, -50]);
+		expect(smoothWaterfallRow(app, row)).toBe(row);
+		app.display.waterfallSmoothing = 0.5;
+		expect(Array.from(smoothWaterfallRow(app, new Float32Array([-100, -100])))).toEqual([-100, -100]);
+		expect(Array.from(smoothWaterfallRow(app, new Float32Array([-60, -100])))).toEqual([-80, -100]);
+		// A new bin count, as after a sample-rate change, starts over.
+		expect(Array.from(smoothWaterfallRow(app, new Float32Array([-70])))).toEqual([-70]);
+		app.display.waterfallSmoothing = 0;
+		smoothWaterfallRow(app, row);
+		expect(app._waterfallSmoothed).toBeUndefined();
 	});
 });
