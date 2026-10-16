@@ -54,6 +54,16 @@ describe('receiver uses the shared UI', () => {
 		settingsMethods.loadSetting.call(wrapper.vm as unknown as AppInstance);
 		expect(wrapper.vm.deviceInfoCollapsed).toBe(true);
 	});
+	it('hides every VFO control when VFOs are turned off', async () => {
+		wrapper = mount(ReceiverView);
+		await wrapper.setData({ connected: true, showVfos: false, radio: { ...wrapper.vm.radio, centerFreq: 5800 } });
+		expect(wrapper.findComponent(VfoPanel).exists()).toBe(false);
+		expect(wrapper.findComponent(components.UiFrequencyDisplay).exists()).toBe(false);
+		expect(wrapper.find('.vfo-bottom-strip').exists()).toBe(false);
+		expect(wrapper.text()).not.toContain('Add VFO');
+		expect(wrapper.text()).not.toContain('Shared VFO DSP');
+		expect(wrapper.get('.vfo-displays').text()).toBe('5800 MHz');
+	});
 	it('reveals selected header VFOs without moving the page or scrolling visible tabs', async () => {
 		wrapper = mount(ReceiverView);
 		await wrapper.setData({ connected: true, vfos: Array.from({ length: 10 }, (_, i) => makeDefaultVfo(130 + i)) });

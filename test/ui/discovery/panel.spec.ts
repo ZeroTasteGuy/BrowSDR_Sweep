@@ -22,6 +22,7 @@ describe('signal discovery lifecycle', () => {
 		vi.stubGlobal('Worker', FakeWorker);
 		const receiver = reactive({
 			...createAppData(),
+			showVfos: true,
 			connected: true,
 			running: true,
 			validateAndApplyVfoFreq: vi.fn(),

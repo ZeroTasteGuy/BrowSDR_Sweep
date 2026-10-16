@@ -14,7 +14,7 @@ import type { Backend } from '@/worker/runtime/backend';
 import type { DeviceCapabilities, RxLevel, AutoGainMode, SdrDeviceInfo } from '@/radio/types';
 import type { Bookmark } from '@/app/workspace/types';
 import type { Vfo } from './types';
-import { makeDefaultVfo, BOOKMARK_CATEGORIES } from './constants';
+import { makeDefaultVfo, BOOKMARK_CATEGORIES, SHOW_VFOS } from './constants';
 import type { DSDStatus } from '@/worker/decoders/dsd/types';
 import type { CapabilityIssue } from '@/platform/types';
 import type { Rtl433Status, Rtl433Protocol } from '@/worker/decoders/types';
@@ -27,6 +27,7 @@ export function createAppData() {
 		usbCapabilityIssue: null as CapabilityIssue | null,
 		connected: false,
 		running: false,
+		showVfos: SHOW_VFOS,
 		isOnline: navigator.onLine,
 		remoteMode: 'none' as 'none' | 'host' | 'client',
 		remoteStatus: '',

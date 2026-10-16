@@ -5,7 +5,7 @@ import type { UiMenuGroup, UiMenuItem } from '@/ui/menus/types';
 
 function toolGroups(receiver: AppInstance): UiMenuGroup[] {
 	const vfos = receiver.vfos;
-	return [
+	const groups: UiMenuGroup[] = [
 		{
 			label: 'Decoders',
 			items: [
@@ -85,38 +85,39 @@ function toolGroups(receiver: AppInstance): UiMenuGroup[] {
 		},
 		utilityGroup(receiver),
 	];
+	// Every decoder runs on a VFO, so they go when VFOs are hidden.
+	return receiver.showVfos ? groups : groups.filter((group) => group.label !== 'Decoders');
 }
 
 function utilityGroup(receiver: AppInstance): UiMenuGroup {
-	return {
-		label: 'Utilities',
-		items: [
-			{
-				id: 'discovery',
-				label: 'Signal Discovery',
-				description: 'Find frequencies & estimate signal widths',
-				icon: 'radio',
-				active: receiver.discovery.enabled,
-				open: receiver.discovery.panelOpen,
-			},
-			{
-				id: 'stats',
-				label: 'DSP Stats',
-				description: 'Receiver performance',
-				icon: 'stats',
-				active: receiver.showStats,
-				open: receiver.showStats,
-			},
-			{
-				id: 'activity',
-				label: 'Frequency Activity',
-				description: 'Signal activity over time',
-				icon: 'activity',
-				active: receiver.showActivity,
-				open: receiver.showActivity,
-			},
-		],
-	};
+	const items: UiMenuItem[] = [
+		{
+			id: 'discovery',
+			label: 'Signal Discovery',
+			description: 'Find frequencies & estimate signal widths',
+			icon: 'radio',
+			active: receiver.discovery.enabled,
+			open: receiver.discovery.panelOpen,
+		},
+		{
+			id: 'stats',
+			label: 'DSP Stats',
+			description: 'Receiver performance',
+			icon: 'stats',
+			active: receiver.showStats,
+			open: receiver.showStats,
+		},
+		{
+			id: 'activity',
+			label: 'Frequency Activity',
+			description: 'Signal activity over time',
+			icon: 'activity',
+			active: receiver.showActivity,
+			open: receiver.showActivity,
+		},
+	];
+	// Frequency Activity tracks VFO squelch, so it goes when VFOs are hidden.
+	return { label: 'Utilities', items: items.filter((item) => receiver.showVfos || item.id !== 'activity') };
 }
 
 function selectTool(receiver: AppInstance, id: string, openOnly = false): void {
@@ -146,7 +147,7 @@ export default defineComponent({
 	setup() {
 		const receiver = inject<AppInstance>('receiver')!;
 		const groups = computed(() => toolGroups(receiver));
-		const active = computed(() => groups.value[0].items.filter((item) => item.active));
+		const active = computed(() => groups.value.find((group) => group.label === 'Decoders')?.items.filter((item) => item.active) ?? []);
 		const shortcut = (item: UiMenuItem) =>
 			h(
 				UiButton,

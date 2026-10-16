@@ -1,5 +1,5 @@
 import type { AppInstance } from '@/app/core/receiver.types';
-import { makeDefaultVfo } from '@/app/core/constants';
+import { makeDefaultVfo, quietVfos } from '@/app/core/constants';
 import { normalizeSpectrumFps } from '@/display/spectrum-rate';
 import { DEFAULT_FFT_SIZE, normalizedSpectrumRange, SPECTRUM_RANGE_VERSION } from '@/display/spectrum-range';
 import { isRecord, restoreFields, primitiveMap } from '@/platform/data';
@@ -57,6 +57,11 @@ export const settingsMethods = {
 				restoreVfoSettings.call(this, setting);
 				if (typeof setting.activeVfoIndex === 'number') this.activeVfoIndex = setting.activeVfoIndex;
 				else if (typeof setting.activeVfo === 'number') this.activeVfoIndex = setting.activeVfo - 1;
+				if (!this.showVfos) {
+					// Saved VFOs may have audio or decoders on; nothing in the UI could turn them off.
+					this.vfos = quietVfos(this.vfos);
+					this.activeVfoIndex = 0;
+				}
 				if (setting.view) restoreFields(this.view, setting.view);
 				restoreSweepSettings.call(this, setting.sweep);
 				if (primitiveMap<boolean>(setting.collapsedPanels, 'boolean')) Object.assign(this.collapsedPanels, setting.collapsedPanels);

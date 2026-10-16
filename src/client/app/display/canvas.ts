@@ -166,7 +166,7 @@ function drawOverlays(this: AppInstance, w: number, h: number, range: { minDB: n
 		if (this._sweepPeak) drawSweepPeak.call(this, this._sweepPeak, w, h, range);
 		return;
 	}
-	drawVfoHighlights.call(this, w, this._fftCtx, h);
+	if (this.showVfos) drawVfoHighlights.call(this, w, this._fftCtx, h);
 	drawDiscovery(this, this._fftCtx, w, h);
 }
 
@@ -427,7 +427,7 @@ function createMouseHandlers(this: AppInstance) {
 	};
 
 	const handleMouseDown = (e: MouseEvent) => {
-		if (e.button === 0 && !this.view.locked && !this.sweep.active) {
+		if (e.button === 0 && !this.view.locked && this.showVfos && !this.sweep.active) {
 			// Left click: set active VFO frequency
 			isDraggingVFO = true;
 			const f = getFreqFromEvent(e);
@@ -546,7 +546,7 @@ function createTouchHandlers(this: AppInstance) {
 	};
 
 	const handleTouchEnd = (e: TouchEvent) => {
-		if (e.touches.length === 0 && !touchIsPanning && !this.view.locked && !this.sweep.active) {
+		if (e.touches.length === 0 && !touchIsPanning && !this.view.locked && this.showVfos && !this.sweep.active) {
 			// Tap-to-tune: only if it was a quick, short-distance touch
 			const elapsed = Date.now() - touchStartTime;
 			if (elapsed < TAP_TIME) {

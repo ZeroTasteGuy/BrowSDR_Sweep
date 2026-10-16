@@ -34,8 +34,10 @@
 	<div v-if="selected" class="discovery-selection">
 		<strong>{{ (selected.frequencyHz / 1e6).toFixed(6) }} MHz · ~{{ width(selected.widthHz) }}</strong>
 		<span>{{ active(selected) ? 'Detected now' : 'Previously detected · not detected now' }} · {{ age(selected.lastSeen) }}</span>
-		<UiButton variant="transcript" :disabled="!receiver.connected" @click="tune(false)">Tune selected VFO</UiButton>
-		<UiButton variant="transcript" :disabled="!receiver.connected" @click="tune(true)">New VFO</UiButton>
+		<template v-if="receiver.showVfos">
+			<UiButton variant="transcript" :disabled="!receiver.connected" @click="tune(false)">Tune selected VFO</UiButton>
+			<UiButton variant="transcript" :disabled="!receiver.connected" @click="tune(true)">New VFO</UiButton>
+		</template>
 	</div>
 	<div class="discovery-list">
 		<table v-if="result.signals.length">

@@ -10,6 +10,9 @@ import * as drivers from '@/radio/sdr-device';
 vi.mock('@/worker/runtime/wasm-init', () => ({ ensureWasmInitialized: vi.fn(), init: vi.fn() }));
 import { Backend } from '@/worker/runtime/backend';
 
+// These tests cover VFO settings and bookmarks, which the app itself ships hidden.
+vi.mock('@/app/core/constants', async (importOriginal) => ({ ...(await importOriginal()), SHOW_VFOS: true }));
+
 afterEach(() => {
 	vi.unstubAllGlobals();
 	vi.restoreAllMocks();

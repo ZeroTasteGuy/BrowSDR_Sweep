@@ -76,6 +76,10 @@ export const bookmarkMethods = {
 	async jumpToBookmark(this: AppInstance, index: number) {
 		const bm = this.bookmarks[index];
 		if (!bm) return;
+		if (!this.showVfos) {
+			retuneToBookmark.call(this, bm);
+			return;
+		}
 		if ((bm.type || 'group') === 'individual') {
 			applyIndividualBookmark.call(this, bm);
 		} else {
@@ -251,6 +255,13 @@ export const bookmarkMethods = {
 		}
 	},
 };
+
+/** Without VFOs a bookmark only retunes the receiver; its VFO, audio and decoder settings are ignored. */
+function retuneToBookmark(this: AppInstance, bm: Bookmark) {
+	const centerFreq = bm.type === 'individual' ? bm.freq : bm.centerFreq;
+	if (centerFreq !== undefined) this.radio.centerFreq = centerFreq;
+	if (bm.type !== 'individual' && bm.sampleRate) this.radio.sampleRate = bm.sampleRate;
+}
 
 function applyIndividualBookmark(this: AppInstance, bm: Bookmark) {
 	if (bm.freq === undefined) return;

@@ -217,10 +217,23 @@ describe('ADS-B receiver controls and aircraft map', () => {
 		expect(wrapper.vm.adsb.sources[1]).toHaveLength(1);
 	});
 	it('restores the decoder flag from saved VFO settings', () => {
-		const app = { ...createAppData(), settingsKey: 'adsb-test' } as unknown as AppInstance;
+		const app = { ...createAppData(), showVfos: true, settingsKey: 'adsb-test' } as unknown as AppInstance;
 		vi.stubGlobal('localStorage', { getItem: () => JSON.stringify({ vfos: [{ ...makeDefaultVfo(1090), adsb: true }] }) });
 		settingsMethods.loadSetting.call(app);
 		expect(app.vfos[0].adsb).toBe(true);
+	});
+	it('turns saved VFO audio and decoders off when VFOs are hidden', () => {
+		const app = { ...createAppData(), settingsKey: 'adsb-test' } as unknown as AppInstance;
+		const saved = [
+			{ ...makeDefaultVfo(1090), enabled: true, adsb: true },
+			{ ...makeDefaultVfo(162), ais: true },
+		];
+		vi.stubGlobal('localStorage', { getItem: () => JSON.stringify({ vfos: saved, activeVfoIndex: 1 }) });
+		settingsMethods.loadSetting.call(app);
+		expect(app.showVfos).toBe(false);
+		expect(app.vfos).toHaveLength(1);
+		expect(app.vfos[0]).toMatchObject({ freq: 1090, enabled: false, adsb: false, ais: false });
+		expect(app.activeVfoIndex).toBe(0);
 	});
 	it('serializes the decoder flag for remote VFO updates', () => {
 		const sendCommand = vi.fn();

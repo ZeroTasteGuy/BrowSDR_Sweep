@@ -5,6 +5,18 @@ import type { PocsagMode } from '@/worker/decoders/types';
 
 export const VFO_COLORS = ['#ff4444', '#4488ff', '#44cc44', '#ff44ff', '#ffaa44', '#44cccc', '#cccc44', '#ff8844'];
 
+/**
+ * This fork is a spectrum and sweep tool, so VFOs (and the audio and decoders that run on them) are hidden.
+ * The code stays in place; set this to true to bring them back.
+ */
+export const SHOW_VFOS = false;
+
+/** With VFOs hidden: keep one VFO for the worker, with audio and every decoder off. */
+export function quietVfos<T extends ReturnType<typeof makeDefaultVfo>>(vfos: T[]): T[] {
+	const off = Object.fromEntries(Object.entries(makeDefaultVfo()).filter(([, value]) => value === false));
+	return vfos.slice(0, 1).map((vfo) => ({ ...vfo, ...off }));
+}
+
 export const makeDefaultVfo = (freq = 100.0) => ({
 	enabled: false,
 	freq: freq,

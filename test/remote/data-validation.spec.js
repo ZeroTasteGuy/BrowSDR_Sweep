@@ -123,6 +123,7 @@ describe('bookmark data boundaries', () => {
 	])('loads a stored bookmark with index %s into valid slot %s', async (activeVfoIndex, expected) => {
 		const app = {
 			bookmarks: [{ name: 'Group', centerFreq: 100, vfos: [makeDefaultVfo(99), makeDefaultVfo(101)], activeVfoIndex }],
+			showVfos: true,
 			radio: {},
 			formatFreq: String,
 			showMsg: vi.fn(),
@@ -130,6 +131,25 @@ describe('bookmark data boundaries', () => {
 		await bookmarkMethods.jumpToBookmark.call(app, 0);
 		expect(app.activeVfoIndex).toBe(expected);
 		expect(app.vfos[app.activeVfoIndex]).toBeDefined();
+	});
+	it('with VFOs hidden, only retunes the receiver and leaves VFOs, audio and decoders alone', async () => {
+		const vfos = [makeDefaultVfo(100)];
+		const app = {
+			bookmarks: [
+				{ name: 'Group', centerFreq: 433.9, sampleRate: 2e6, vfos: [{ ...makeDefaultVfo(433.92), rtl433: true }, makeDefaultVfo(434)] },
+				{ type: 'individual', name: 'VTX', freq: 5800, mode: 'wfm' },
+			],
+			showVfos: false,
+			vfos,
+			radio: { centerFreq: 100, sampleRate: 20e6 },
+			showMsg: vi.fn(),
+		};
+		await bookmarkMethods.jumpToBookmark.call(app, 0);
+		expect(app.radio).toEqual({ centerFreq: 433.9, sampleRate: 2e6 });
+		await bookmarkMethods.jumpToBookmark.call(app, 1);
+		expect(app.radio).toEqual({ centerFreq: 5800, sampleRate: 2e6 });
+		expect(app.vfos).toBe(vfos);
+		expect(vfos).toEqual([makeDefaultVfo(100)]);
 	});
 	it.each([-1, 0.5, 1, '0'])('rejects an invalid active bookmark index %s', (activeVfoIndex) => {
 		expect(() => parseBookmarks(JSON.stringify([{ name: 'Group', vfos: [makeDefaultVfo()], activeVfoIndex }]))).toThrow();

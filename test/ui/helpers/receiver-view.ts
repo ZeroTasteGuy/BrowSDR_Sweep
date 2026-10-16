@@ -52,7 +52,8 @@ export const ReceiverView = defineComponent({
 	provide() {
 		return { receiver: this };
 	},
-	data: () => ({ ...createAppData(), receiverId: 'test-receiver', workspace: null }),
+	// These tests cover the VFO UI, which the app itself ships hidden (SHOW_VFOS).
+	data: () => ({ ...createAppData(), showVfos: true, receiverId: 'test-receiver', workspace: null }),
 	computed: computedProperties,
 	mounted() {
 		watchVfoSelection.call(this);
