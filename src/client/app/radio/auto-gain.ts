@@ -1,10 +1,11 @@
 import { errorMessage } from '@/platform/errors';
 import type { AppInstance } from '@/app/core/receiver.types';
-import { nextLimeGain } from '@/radio/lime-auto-gain';
+import { limeGainTotal, nextLimeGain } from '@/radio/lime-auto-gain';
 import type { LimeGains, HackRFGains, DeviceCapabilities, RxLevel, AutoGainMode } from '@/radio/types';
-import { createHackRFGainAdjustment } from '@/radio/hackrf-auto-gain';
+import { createHackRFGainAdjustment, hackrfGainTotal } from '@/radio/hackrf-auto-gain';
+import { createGainGovernor } from '@/radio/auto-gain-governor';
 import { receiverOverloaded } from '@/radio/auto-gain-level';
-import type { AutoGainPreset } from './types';
+import type { AutoGainPreset, GainStep } from './types';
 
 const autoGainPresets: AutoGainPreset[] = [
 	{ id: 'race', label: 'Race', description: 'Near quads: extra headroom, RF amp off', target: 80, allowAmp: false },
@@ -81,6 +82,7 @@ export const autoGainMethods = {
 		let tuned = '';
 		let adjustHackrf = createHackRFGainAdjustment(0.5, false);
 		let after = Date.now() + 150;
+		const governor = createGainGovernor();
 		this.autoGain.status = 'Measuring receiver level…';
 		try {
 			while (wanted()) {
@@ -92,32 +94,22 @@ export const autoGainMethods = {
 				if (key !== settings) {
 					settings = key;
 					adjustHackrf = createHackRFGainAdjustment(preference, this.autoGain.allowAmp);
+					governor.reset();
 				}
 				if (tuning() !== tuned) {
 					// Readings taken before a retune describe the old band.
 					tuned = tuning();
 					after = Date.now() + 150;
+					governor.reset();
 				}
 				const level = await this.backend.getRxLevel();
 				if (!wanted()) break;
 				if (!level || level.started < after || Date.now() - level.timestamp > 1000) continue;
 				this.autoGain.level = level;
 				this.autoGain.overload = receiverOverloaded(level);
-				let next: { gains: Record<string, number>; done: boolean; reason: string };
-				try {
-					next = isHackrf
-						? adjustHackrf(pickGains(this, HACKRF_NAMES) as HackRFGains, level)
-						: nextLimeGain(pickGains(this, LIME_NAMES) as LimeGains, level, preference);
-				} catch (error) {
-					this.autoGain.status = errorMessage(error);
-					continue;
-				}
-				if (next.done) {
-					this.autoGain.status = next.reason === 'Levels settled' ? `Holding · RMS ${level.rmsDbfs.toFixed(0)} dBFS` : next.reason;
-					continue;
-				}
-				this.autoGain.status = next.reason;
-				await applyLoopGains.call(this, isHackrf ? HACKRF_NAMES : LIME_NAMES, next.gains, wanted);
+				const proposal = planLoopStep(this, level, isHackrf ? (gains) => adjustHackrf(gains as HackRFGains, level) : null, governor);
+				if (!proposal) continue;
+				await applyLoopGains.call(this, isHackrf ? HACKRF_NAMES : LIME_NAMES, proposal, wanted);
 				after = Date.now() + 150;
 			}
 		} finally {
@@ -260,6 +252,47 @@ function startWithMinimumGain(capabilities: DeviceCapabilities | null, gains: Re
 
 const HACKRF_NAMES = ['Amp (14dB)', 'LNA', 'VGA'];
 const LIME_NAMES = ['LNA', 'TIA', 'PGA'];
+
+/** Turn one level reading into gains to apply now, or null to hold. Sets the status line either way. */
+function planLoopStep(
+	app: AppInstance,
+	level: RxLevel,
+	adjustHackrf: ((gains: Record<string, number>) => GainStep) | null,
+	governor: ReturnType<typeof createGainGovernor>,
+): Record<string, number> | null {
+	const isHackrf = !!adjustHackrf;
+	const current = pickGains(app, isHackrf ? HACKRF_NAMES : LIME_NAMES);
+	const total = (gains: Record<string, number>) => (isHackrf ? hackrfGainTotal(gains as HackRFGains) : limeGainTotal(gains as LimeGains));
+	let next: GainStep;
+	try {
+		next = adjustHackrf ? adjustHackrf(current) : nextLimeGain(current as LimeGains, level, app.autoGain.target / 100);
+	} catch (error) {
+		app.autoGain.status = errorMessage(error);
+		return null;
+	}
+	const locked = `Locked · RMS ${level.rmsDbfs.toFixed(0)} dBFS`;
+	const proposal = isHackrf ? vgaFirst(current, next.gains) : next.gains;
+	const ampChange = isHackrf && proposal['Amp (14dB)'] !== current['Amp (14dB)'];
+	// A change that only moves gain between stages is not worth a glitch in the waterfall.
+	if (next.done || (!ampChange && total(proposal) === total(current))) {
+		app.autoGain.status = next.done && next.reason !== 'Levels settled' ? next.reason : locked;
+		return null;
+	}
+	const decision = governor.decide(total(current), total(proposal), app.autoGain.overload);
+	app.autoGain.status = decision.act ? next.reason : `${locked} · ${decision.held}`;
+	return decision.act ? proposal : null;
+}
+
+/**
+ * Make small corrections on the VGA (2 dB steps) and leave the LNA (8 dB steps)
+ * where it is, so a correction does not overshoot. The LNA only moves when the
+ * VGA runs out of range or the amp switches.
+ */
+function vgaFirst(current: Record<string, number>, proposed: Record<string, number>) {
+	if (proposed['Amp (14dB)'] !== current['Amp (14dB)']) return proposed;
+	const vga = current.VGA + (proposed.LNA + proposed.VGA - current.LNA - current.VGA);
+	return vga >= 0 && vga <= 62 ? { ...current, VGA: vga } : proposed;
+}
 
 function pickGains(app: AppInstance, names: string[]) {
 	return Object.fromEntries(names.map((name) => [name, app.gains[name]]));

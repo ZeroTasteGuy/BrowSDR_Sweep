@@ -361,12 +361,35 @@ describe('continuous auto gain', () => {
 		await vi.advanceTimersByTimeAsync(30000);
 		expect(app.gains.LNA + app.gains.VGA).toBeGreaterThan(50);
 		expect(app.gains['Amp (14dB)']).toBe(0);
-		expect(app.autoGain.status).toMatch(/Holding|Gain limit/);
+		expect(app.autoGain.status).toMatch(/Locked|Gain limit/);
 		app.autoGain.enabled = false;
 		await vi.advanceTimersByTimeAsync(1000);
 		await loop;
 		expect(app._autoGainLoop).toBeNull();
 		expect(app.autoGain.status).toBe('');
+	});
+	it('settles and stops changing gain on a strong, bursty signal', async () => {
+		let total = 32;
+		let seed = 1;
+		const random = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+		const app = loopApp(() => {
+			const rms = -38 + (total - 32);
+			// Bursts clip now and then once the peaks come near full scale.
+			const clipped = rms > -28 && random() < 0.3;
+			return { ...level(rms, clipped ? -0.5 : rms + 10, clipped ? 0.01 : 0), started: Date.now() };
+		});
+		app.backend.setGain.mockImplementation(async () => {
+			total = app.gains.LNA + app.gains.VGA;
+		});
+		void app.runAutoGainLoop();
+		await vi.advanceTimersByTimeAsync(30000);
+		const writes = app.backend.setGain.mock.calls.length;
+		// The old one-reading logic made over 100 gain writes here; now it only probes again after a minute, then after two.
+		await vi.advanceTimersByTimeAsync(180000);
+		expect(app.backend.setGain.mock.calls.length - writes).toBeLessThanOrEqual(20);
+		expect(app.gains.LNA).toBe(16);
+		app.autoGain.enabled = false;
+		await vi.advanceTimersByTimeAsync(1000);
 	});
 	it('drops gain at once and flags overload', async () => {
 		const app = loopApp(() => ({ ...level(-12, -1, 0.01), started: Date.now() }));
