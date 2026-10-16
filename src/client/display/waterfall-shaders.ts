@@ -22,6 +22,8 @@ uniform float levelOffset;
 uniform float levelBins;
 uniform float levelScale;
 uniform vec2 range;
+// Waterfall smoothing: weight of each older row, 0 for none.
+uniform float keep;
 
 float powerAt(float index, float slot) {
     float location = levelOffset + clamp(index, 0.0, levelBins - 1.0);
@@ -30,8 +32,7 @@ float powerAt(float index, float slot) {
     return -192.0 + (encodedPower.r * 65280.0 + encodedPower.a * 255.0) * (256.0 / 65535.0);
 }
 
-vec4 colourAt(float row) {
-    if (row > validRows) return vec4(0.0, 0.0, 0.0, 1.0);
+float peakAt(float row) {
     float slot = mod(current - row + slots, slots);
     float left = (offset + (gl_FragCoord.x - 0.5) / viewport.x / zoom) * bins / levelScale;
     float right = (offset + (gl_FragCoord.x + 0.5) / viewport.x / zoom) * bins / levelScale;
@@ -41,7 +42,23 @@ vec4 colourAt(float row) {
         float index = first + float(i);
         if (index < ceil(right)) peak = max(peak, powerAt(index, slot));
     }
-    float normalized = clamp((peak - range.x) / (range.y - range.x), 0.0, 1.0);
+    return peak;
+}
+
+// Each shown row averages itself with the older rows below it, so the whole
+// history follows the smoothing setting, not just the rows drawn after a change.
+vec4 colourAt(float row) {
+    if (row > validRows) return vec4(0.0, 0.0, 0.0, 1.0);
+    float total = peakAt(row);
+    float weight = 1.0;
+    float w = keep;
+    for (int k = 1; k < 16; k++) {
+        if (w < 0.02 || row + float(k) > validRows) break;
+        total += w * peakAt(row + float(k));
+        weight += w;
+        w *= keep;
+    }
+    float normalized = clamp((total / weight - range.x) / (range.y - range.x), 0.0, 1.0);
     return texture2D(palette, vec2((normalized * 255.0 + 0.5) / 256.0, 0.5));
 }
 

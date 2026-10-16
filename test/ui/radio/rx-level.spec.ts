@@ -8,6 +8,23 @@ import { DEFAULT_SPECTRUM_RANGE } from '@/display/spectrum-range';
 
 afterEach(() => vi.useRealTimers());
 
+it('keeps slider scales and the unedited bound fixed, including at crossing limits', async () => {
+	const receiver = reactive({ display: { minDB: -110, maxDB: -50 }, running: false });
+	const wrapper = mount(ContrastControls, { global: { provide: { receiver } } });
+	const sliders = wrapper.findAll('input[type=range]');
+	await sliders[0].setValue(-80);
+	expect(receiver.display).toEqual({ minDB: -80, maxDB: -50 });
+	expect(sliders[1].attributes('min')).toBe('-199');
+	await sliders[1].setValue(-40);
+	expect(receiver.display).toEqual({ minDB: -80, maxDB: -40 });
+	expect(sliders[0].attributes('max')).toBe('-1');
+	await sliders[0].setValue(-20);
+	expect(receiver.display).toEqual({ minDB: -41, maxDB: -40 });
+	await sliders[1].setValue(-90);
+	expect(receiver.display).toEqual({ minDB: -41, maxDB: -40 });
+	wrapper.unmount();
+});
+
 it('keeps Top and Floor apart, sets centre-anchored zoom and waterfall smoothing from the side sliders', async () => {
 	const applyZoomToEngine = vi.fn();
 	const receiver = reactive({

@@ -22,7 +22,7 @@ import { createAppData } from './core/state';
 import { computedProperties } from './core/computed';
 import { uiHelperMethods, watchVfoSelection } from './core/ui-helpers';
 import { connectionMethods } from './radio/connection';
-import { canvasMethods, mountCanvas } from './display/canvas';
+import { applyWaterfallSmoothing, canvasMethods, mountCanvas } from './display/canvas';
 import { audioMethods } from './audio/audio';
 import { vfoMethods } from './radio/vfo';
 import { settingsMethods } from './radio/settings';
@@ -248,7 +248,10 @@ function watchReceiverSettings(this: AppInstance) {
 
 	this.$watch(
 		() => [this.display.waterfallSmoothing, this.display.spectrumSplit],
-		() => this.saveSetting(),
+		() => {
+			this.saveSetting();
+			applyWaterfallSmoothing(this);
+		},
 	);
 
 	this.$watch(

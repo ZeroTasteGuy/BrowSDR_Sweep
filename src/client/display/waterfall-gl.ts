@@ -78,11 +78,17 @@ export class HighResolutionWaterfall {
 		this.uniform('rows', this.historySize);
 		this.uniform('bins', bandSize);
 		this.setRange(DEFAULT_SPECTRUM_RANGE.minDB, DEFAULT_SPECTRUM_RANGE.maxDB);
+		this.setSmoothing(0);
 		this.render();
 	}
 
 	setRange(minDB: number, maxDB: number) {
 		this.gl.uniform2f(this.gl.getUniformLocation(this.program, 'range'), minDB, maxDB);
+	}
+
+	/** 0 to 0.95: how much each older row counts towards the one above it. Applies to the whole history. */
+	setSmoothing(keep: number) {
+		this.uniform('keep', Math.max(0, Math.min(0.95, keep)));
 	}
 
 	setZoom(offset: number, scale: number) {

@@ -31,6 +31,7 @@ export const canvasMethods = {
 		}
 
 		this._waterfallEngine.setRange(this.display.minDB, this.display.maxDB);
+		applyWaterfallSmoothing(this);
 		this._lastSpectrumData = undefined;
 		this._waterfallClock = new WaterfallClock();
 		this._remoteSpectrumLimiter = new SpectrumFrameLimiter();
@@ -290,12 +291,21 @@ function renderWaterfallFrame(this: AppInstance, data: Float32Array<ArrayBufferL
 	}
 }
 
+/** Hand the smoothing setting to a renderer that applies it to its whole history, and redraw. */
+export function applyWaterfallSmoothing(app: AppInstance) {
+	const engine = app._waterfallEngine;
+	if (!(engine instanceof HighResolutionWaterfall)) return;
+	engine.setSmoothing(app.display.waterfallSmoothing);
+	engine.render();
+}
+
 /**
  * Exponential average over time, in dB, so noise settles into an even floor.
  * Returns the input untouched when smoothing is off.
  */
 export function smoothWaterfallRow(app: AppInstance, row: Float32Array<ArrayBufferLike>): Float32Array<ArrayBufferLike> {
-	const amount = app.display.waterfallSmoothing;
+	// The high-resolution renderer smooths the whole history itself.
+	const amount = app._waterfallEngine instanceof HighResolutionWaterfall ? 0 : app.display.waterfallSmoothing;
 	if (!(amount > 0)) {
 		app._waterfallSmoothed = undefined;
 		return row;
