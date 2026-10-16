@@ -48,7 +48,9 @@ export function patchDcSpike(spectrum: Float32Array, maxHalfWidth: number): void
 
 /**
  * Shift a DC-centred spectrum captured `bins` above the display centre back
- * onto the display grid. Bins with no captured data get the frame's floor.
+ * onto the display grid. The display edge the capture doesn't reach mirrors
+ * the captured bins next to it, so it shows the same filter skirt and noise
+ * texture as the rest of the edge instead of a flat dead band.
  */
 export function shiftSpectrum(captured: Float32Array, out: Float32Array, bins: number): void {
 	const n = captured.length;
@@ -56,11 +58,11 @@ export function shiftSpectrum(captured: Float32Array, out: Float32Array, bins: n
 		out.set(captured);
 		return;
 	}
-	let floor = Infinity;
-	for (let i = 0; i < n; i++) if (captured[i] < floor) floor = captured[i];
 	for (let i = 0; i < n; i++) {
-		const source = i - bins;
-		out[i] = source >= 0 && source < n ? captured[source] : floor;
+		let source = i - bins;
+		if (source < 0) source = -source - 1;
+		else if (source >= n) source = 2 * n - source - 1;
+		out[i] = captured[Math.min(n - 1, Math.max(0, source))];
 	}
 }
 
