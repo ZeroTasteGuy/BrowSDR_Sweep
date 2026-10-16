@@ -1,5 +1,5 @@
-import type { HackRFGains, RxLevel, AutoGainMode } from './types';
-import { gainAdjustment, gainAdjustmentReason, receiverOverloaded } from './auto-gain-level';
+import type { HackRFGains, RxLevel, AutoGainMode, AutoGainPreference } from './types';
+import { gainAdjustment, gainAdjustmentReason, preferenceMode, receiverOverloaded } from './auto-gain-level';
 
 // RF amp gain varies with frequency; use 10 dB only to stage a conservative
 // transition, then measure the actual ADC level again.
@@ -25,8 +25,9 @@ export function hackrfGainProfile(total: number, mode: AutoGainMode = 'balanced'
 	return best;
 }
 
-export function nextHackRFGain(gains: HackRFGains, level: RxLevel, mode: AutoGainMode = 'balanced', allowAmp = true) {
-	const change = gainAdjustment(level, mode);
+export function nextHackRFGain(gains: HackRFGains, level: RxLevel, preference: AutoGainPreference = 'balanced', allowAmp = true) {
+	const change = gainAdjustment(level, preference);
+	const mode = preferenceMode(preference);
 	const total = hackrfGainTotal(gains);
 	const amp = gains['Amp (14dB)'] ? 1 : 0;
 	const overloaded = receiverOverloaded(level);
@@ -65,7 +66,7 @@ function amplifierPreference(gains: HackRFGains, mode: AutoGainMode, change: num
 }
 
 /** Track actual amp overloads, without treating excessive starting gain as a failed amp trial. */
-export function createHackRFGainAdjustment(mode: AutoGainMode) {
+export function createHackRFGainAdjustment(mode: AutoGainPreference, ampAllowed = true) {
 	let ampOverloads = 0;
 	let retryCeiling = Infinity;
 	return (gains: HackRFGains, level: RxLevel) => {
@@ -73,9 +74,10 @@ export function createHackRFGainAdjustment(mode: AutoGainMode) {
 			ampOverloads++;
 			retryCeiling = hackrfGainTotal(gains) - 6;
 		}
-		const allowAmp = ampOverloads < 2 && (!!gains['Amp (14dB)'] || hackrfGainTotal(gains) <= retryCeiling);
+		const allowAmp = ampAllowed && ampOverloads < 2 && (!!gains['Amp (14dB)'] || hackrfGainTotal(gains) <= retryCeiling);
 		const next = nextHackRFGain(gains, level, mode, allowAmp);
-		if (next.done && ampOverloads >= 2 && mode !== 'strong') next.reason += ' · Amp kept off after repeated overload';
+		if (next.done && ampAllowed && ampOverloads >= 2 && preferenceMode(mode) !== 'strong')
+			next.reason += ' · Amp kept off after repeated overload';
 		return next;
 	};
 }

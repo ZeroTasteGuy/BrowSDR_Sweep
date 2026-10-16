@@ -454,6 +454,34 @@ canvas {
 	font-size: 11px;
 	font-variant-numeric: tabular-nums;
 }
+.rx-level-bar {
+	position: relative;
+	height: 8px;
+	border-radius: 4px;
+	background: var(--border);
+	overflow: hidden;
+}
+.rx-level-fill {
+	height: 100%;
+	transition: width 0.2s;
+}
+.rx-level-fill.green {
+	background: #3ccf6e;
+}
+.rx-level-fill.amber {
+	background: #f0b429;
+}
+.rx-level-fill.red {
+	background: var(--accent-red, #ff5555);
+}
+.rx-level-limit {
+	position: absolute;
+	top: 0;
+	bottom: 0;
+	left: 94%;
+	width: 2px;
+	background: var(--text-muted);
+}
 .rx-level-hint {
 	font-size: 10px;
 	color: var(--text-muted);

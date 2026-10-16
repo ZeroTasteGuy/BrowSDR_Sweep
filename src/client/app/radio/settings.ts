@@ -22,6 +22,8 @@ export const settingsMethods = {
 			recentRemoteIds: this.recentRemoteIds,
 			// Sweep mode itself is not restored: it only applies once a HackRF is connected.
 			sweep: savedSweepSettings(this.sweep),
+			autoGain: this.autoGain && { enabled: this.autoGain.enabled, target: this.autoGain.target, allowAmp: this.autoGain.allowAmp },
+			gainsByBand: this.gainsByBand,
 		};
 		const json = JSON.stringify(obj);
 		localStorage.setItem(this.settingsKey || 'SDRSetting', json);
@@ -65,6 +67,7 @@ export const settingsMethods = {
 				}
 				if (setting.view) restoreFields(this.view, setting.view);
 				restoreSweepSettings.call(this, setting.sweep);
+				restoreAutoGainSettings.call(this, setting);
 				if (primitiveMap<boolean>(setting.collapsedPanels, 'boolean')) Object.assign(this.collapsedPanels, setting.collapsedPanels);
 				if (Array.isArray(setting.recentRemoteIds))
 					this.recentRemoteIds = setting.recentRemoteIds.filter((id: unknown): id is string => typeof id === 'string');
@@ -165,4 +168,18 @@ function restoreSweepSettings(this: AppInstance, saved: unknown) {
 		fields.peakFadeDbPerSecond = this.sweep.peakFadeDbPerSecond;
 	const { defaultsVersion: _version, ...restored } = fields;
 	Object.assign(this.sweep, restored, normalizedSweepRange(restored));
+}
+
+function restoreAutoGainSettings(this: AppInstance, setting: Record<string, unknown>) {
+	const saved = setting.autoGain;
+	if (isRecord(saved)) {
+		if (typeof saved.enabled === 'boolean') this.autoGain.enabled = saved.enabled;
+		if (typeof saved.allowAmp === 'boolean') this.autoGain.allowAmp = saved.allowAmp;
+		if (typeof saved.target === 'number' && saved.target >= 0 && saved.target <= 100) this.autoGain.target = saved.target;
+	}
+	if (isRecord(setting.gainsByBand)) {
+		for (const [key, gains] of Object.entries(setting.gainsByBand)) {
+			if (primitiveMap<number>(gains, 'number')) this.gainsByBand[key] = { ...gains };
+		}
+	}
 }

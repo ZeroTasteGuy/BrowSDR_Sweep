@@ -126,6 +126,33 @@
 	flex-wrap: wrap;
 	gap: 6px;
 }
+.auto-gain-presets {
+	display: flex;
+	gap: 6px;
+	width: 100%;
+}
+.auto-gain-presets > .btn {
+	flex: 1;
+}
+.auto-gain-presets > .btn.active {
+	border-color: #00ffea;
+	color: #00ffea;
+}
+.auto-gain-target {
+	width: 100%;
+}
+.auto-gain-off {
+	opacity: 0.5;
+}
+.auto-gain-scale {
+	display: flex;
+	justify-content: space-between;
+	font-size: 10px;
+	color: var(--text-muted);
+}
+.auto-driven {
+	opacity: 0.6;
+}
 .auto-gain p {
 	width: 100%;
 	font-size: 11px;

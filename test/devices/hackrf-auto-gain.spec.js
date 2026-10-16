@@ -4,6 +4,7 @@ import { HackRFDevice } from '@/devices/hackrf/device';
 import { HackRFRxLevel } from '@/devices/hackrf/rx-level';
 import { hackrfGainProfile, hackrfGainTotal, nextHackRFGain, createHackRFGainAdjustment } from '@/radio/hackrf-auto-gain';
 import { autoGainMethods } from '@/app/radio/auto-gain';
+import { gainBand } from '@/app/radio/gain-bands';
 
 afterEach(() => vi.useRealTimers());
 const level = (rmsDbfs = -22, peakDbfs = -8, clippedFraction = 0) => ({
@@ -340,4 +341,47 @@ it('raises gain gradually from the staged level after enabling the amp, using fr
 		expect(hackrfGainTotal(next.gains) - hackrfGainTotal(current)).toBe(2);
 		current = next.gains;
 	}
+});
+
+describe('continuous auto gain', () => {
+	function loopApp(readLevel) {
+		const app = appWithLevel(readLevel);
+		Object.assign(app.autoGain, { enabled: true, target: 50, allowAmp: false, overload: false, cancelled: false });
+		app.autoGainSupported = () => true;
+		app.sweepMode = () => false;
+		return app;
+	}
+	it('keeps raising gain for a weak band, holds when settled and never uses the amp unless allowed', async () => {
+		let gainTotal = 32;
+		const app = loopApp(() => ({ ...level(-60 + (gainTotal - 32), -40 + (gainTotal - 32)), started: Date.now() }));
+		app.backend.setGain.mockImplementation(async () => {
+			gainTotal = app.gains.LNA + app.gains.VGA;
+		});
+		const loop = app.runAutoGainLoop();
+		await vi.advanceTimersByTimeAsync(30000);
+		expect(app.gains.LNA + app.gains.VGA).toBeGreaterThan(50);
+		expect(app.gains['Amp (14dB)']).toBe(0);
+		expect(app.autoGain.status).toMatch(/Holding|Gain limit/);
+		app.autoGain.enabled = false;
+		await vi.advanceTimersByTimeAsync(1000);
+		await loop;
+		expect(app._autoGainLoop).toBeNull();
+		expect(app.autoGain.status).toBe('');
+	});
+	it('drops gain at once and flags overload', async () => {
+		const app = loopApp(() => ({ ...level(-12, -1, 0.01), started: Date.now() }));
+		void app.runAutoGainLoop();
+		await vi.advanceTimersByTimeAsync(1000);
+		expect(app.gains.LNA + app.gains.VGA).toBeLessThan(32);
+		expect(app.autoGain.overload).toBe(true);
+		app.autoGain.enabled = false;
+		await vi.advanceTimersByTimeAsync(1000);
+	});
+});
+
+it('groups frequencies into FPV bands for remembered gains', () => {
+	expect(gainBand(5740)).toBe('5.8G');
+	expect(gainBand(2440)).toBe('2.4G');
+	expect(gainBand(868)).toBe('900M');
+	expect(gainBand(433.92)).toBe('400M');
 });

@@ -175,12 +175,18 @@
 					<!-- Dynamic gain controls based on connected device -->
 					<div class="auto-gain" v-if="autoGainSupported() && remoteMode !== 'client' && !sweepMode()">
 						<div class="gain-actions">
-							<UiMenu :id="receiverId + '-auto-gain-options'" label="Auto gain preferences" primary-label="Auto set gains" :groups="autoGainOptions()" :disabled="!running || autoGain.active" @primary="autoSetGains('balanced')" @select="autoSetGains($event)" />
+							<UiCheckbox v-model="autoGain.enabled" label="Auto gain" class="auto-gain-toggle" title="Keep adjusting LNA, VGA and amp while receiving" />
 							<GainReset />
 						</div>
-						<UiButton v-if="autoGain.active"  @click="cancelAutoGain" :disabled="autoGain.cancelled">Cancel</UiButton>
-							<p>Click for Balanced, or choose a preference. Adjusts {{ autoGainControls() }} for the whole receiver and holds the result steady.</p>
-							<p role="status"><template v-if="autoGain.status">{{ autoGain.mode === 'sensitivity' ? 'Weak signals' : autoGain.mode === 'strong' ? 'Strong signals' : 'Balanced' }} · </template>{{ autoGain.status }}<template v-if="autoGain.level"> · RMS {{ autoGain.level.rmsDbfs.toFixed(1) }} dBFS · peak {{ autoGain.level.peakDbfs.toFixed(1) }} dBFS · {{ (autoGain.level.clippedFraction * 100).toFixed(3) }}% clipped</template></p>
+						<div class="auto-gain-presets" role="group" aria-label="Gain presets">
+							<UiButton v-for="preset in autoGainPresets()" :key="preset.id" variant="secondary" :class="{ active: preset.target === undefined ? !autoGain.enabled : autoGain.enabled && autoGain.target === preset.target && autoGain.allowAmp === !!preset.allowAmp }" :title="preset.description" @click="applyAutoGainPreset(preset.id)">{{ preset.label }}</UiButton>
+						</div>
+						<div class="auto-gain-target" :class="{ 'auto-gain-off': !autoGain.enabled }">
+							<UiSlider v-model="autoGain.target" input-label="Auto gain target" :min="0" :max="100" :step="5" compact />
+							<div class="auto-gain-scale"><span>Weak signals</span><span>Strong signals</span></div>
+						</div>
+						<UiCheckbox v-if="deviceCapabilities?.deviceType === 'hackrf'" v-model="autoGain.allowAmp" label="Allow RF amp" title="Let auto gain switch the 14 dB amp on. Leave off near transmitters." />
+						<p role="status" :class="{ 'rx-level-warning': autoGain.enabled && autoGain.overload }">{{ !autoGain.enabled ? 'Auto gain off' : !running ? 'Auto gain on · starts with reception' : autoGain.status || 'Measuring receiver level…' }}</p>
 					</div>
 					<template v-if="deviceCapabilities">
 						<RxLevel />
@@ -195,10 +201,10 @@
 							</template>
 							<template v-else-if="gc.type === 'slider'">
 								<label>{{ gc.name }} Gain</label>
-								<UiSlider v-model="gains[gc.name]" :input-label="gc.name + ' Gain'" :min="gc.min" :max="gc.max" :step="gc.step" :disabled="autoGain.active || (remoteMode === 'client' && locks[gc.name])">{{ deviceCapabilities.deviceType === 'limesdr' && gc.name === 'PGA' ? gains.PGA - 12 : gc.options ? (gc.options[gains[gc.name]] / 10).toFixed(1) : gains[gc.name] }} dB</UiSlider>
+								<UiSlider :class="{ 'auto-driven': autoGain.enabled && autoGainSupported() && !sweepMode() }" v-model="gains[gc.name]" :input-label="gc.name + ' Gain'" :min="gc.min" :max="gc.max" :step="gc.step" :disabled="autoGain.active || (remoteMode === 'client' && locks[gc.name])">{{ deviceCapabilities.deviceType === 'limesdr' && gc.name === 'PGA' ? gains.PGA - 12 : gc.options ? (gc.options[gains[gc.name]] / 10).toFixed(1) : gains[gc.name] }} dB</UiSlider>
 							</template>
 							<template v-else>
-								<UiCheckbox variant="native" v-model="gains[gc.name]" :true-value="1" :false-value="0" :label="gc.name" style="flex:1" :style="{ opacity: (remoteMode === 'client' && locks[gc.name]) ? 0.5 : 1 }" :disabled="autoGain.active || (remoteMode === 'client' && locks[gc.name])"></UiCheckbox>
+								<UiCheckbox variant="native" :class="{ 'auto-driven': autoGain.enabled && autoGainSupported() && !sweepMode() }" v-model="gains[gc.name]" :true-value="1" :false-value="0" :label="gc.name" style="flex:1" :style="{ opacity: (remoteMode === 'client' && locks[gc.name]) ? 0.5 : 1 }" :disabled="autoGain.active || (remoteMode === 'client' && locks[gc.name])"></UiCheckbox>
 							</template>
 							<UiLock v-if="remoteMode === 'host' || (remoteMode === 'client' && locks[gc.name])" :locked="locks[gc.name]" :host="remoteMode === 'host'" @toggle="locks[gc.name] = !locks[gc.name]"></UiLock>
 						</UiFormRow>

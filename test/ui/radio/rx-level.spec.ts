@@ -39,9 +39,8 @@ it('polls raw levels, clears stale readings and stops polling on unmount', async
 	});
 	const wrapper = mount(RxLevel, { global: { provide: { receiver } } });
 	await vi.advanceTimersByTimeAsync(250);
-	expect(wrapper.text()).toContain('RX peak 50%');
-	expect(wrapper.text()).toContain('Near-clipped 0.100%');
-	expect(wrapper.text()).toContain('ADC overload');
+	expect(wrapper.text()).toContain('Overload: reduce gain');
+	expect(wrapper.get('.rx-level-fill').attributes('style')).toContain('width: 88%');
 	getRxLevel.mockResolvedValue({ timestamp: Date.now() - 2000, peakDbfs: -6 });
 	await vi.advanceTimersByTimeAsync(250);
 	expect(wrapper.text()).toContain('waiting for samples');
