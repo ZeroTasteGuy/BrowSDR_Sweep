@@ -16,8 +16,8 @@ export function offsetTuningHz(bins: number, sampleRate: number, fftSize: number
 	return fftSize ? (bins * sampleRate) / fftSize : 0;
 }
 
-/** Most of the spike skirt is within a few kHz; never patch more than this either side. */
-const SPIKE_HALF_WIDTH_HZ = 25e3;
+/** The HackRF spike skirt is up to about 100 kHz each side; never patch more than this. */
+const SPIKE_HALF_WIDTH_HZ = 150e3;
 
 export function spikeHalfWidthBins(sampleRate: number, fftSize: number): number {
 	const bins = Math.round((SPIKE_HALF_WIDTH_HZ * fftSize) / sampleRate);

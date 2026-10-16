@@ -134,10 +134,10 @@ describe('DC spike patch', () => {
 			return -100 + (x / 2147483647) * 4;
 		});
 	}
-	it('sizes the patch from 25 kHz, within limits', () => {
-		expect(spikeHalfWidthBins(20e6, 65536)).toBe(82);
-		expect(spikeHalfWidthBins(20e6, 2048)).toBe(3);
-		expect(spikeHalfWidthBins(2e6, 256)).toBe(3);
+	it('sizes the patch from 150 kHz, within limits', () => {
+		expect(spikeHalfWidthBins(20e6, 65536)).toBe(492);
+		expect(spikeHalfWidthBins(20e6, 2048)).toBe(15);
+		expect(spikeHalfWidthBins(2e6, 256)).toBe(8);
 		expect(spikeHalfWidthBins(20e6, 64)).toBe(2);
 	});
 	it('replaces the spike and its skirt with nearby noise', () => {
