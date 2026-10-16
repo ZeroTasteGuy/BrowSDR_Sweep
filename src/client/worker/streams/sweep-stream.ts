@@ -22,6 +22,7 @@ export async function startSweepStream(
 	if (!device.startSweep) throw new Error('This device does not support sweep mode');
 	const plan = planSweep(opts);
 	const generation = ++backend._streamGeneration;
+	backend._tuningOffsetHz = 0;
 
 	backend._disposeSpectrum?.();
 	const fft = new FFT(plan.fftSize, sweepWindow(plan.fftSize));

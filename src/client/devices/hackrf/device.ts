@@ -104,6 +104,15 @@ export class HackRFDevice implements SdrDevice {
 		await this.hackrf.setFreq(freqHz);
 	}
 
+	/**
+	 * An eighth of the sample rate. The baseband filter only passes about 70%
+	 * of the sample rate, so this moves the spike off centre without losing
+	 * usable bandwidth: the unused filter edge just moves to one side.
+	 */
+	tuningOffsetHz(sampleRate: number): number {
+		return sampleRate / 8;
+	}
+
 	async setGain(name: string, value: number): Promise<void> {
 		switch (name) {
 			case 'LNA':

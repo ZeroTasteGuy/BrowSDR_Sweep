@@ -49,6 +49,8 @@ export interface SdrDevice {
 
 	setSampleRate(rate: number): Promise<void>;
 	setFrequency(freqHz: number): Promise<void>;
+	/** How far above the requested centre to tune, so the DC spike sits off it. */
+	tuningOffsetHz?(sampleRate: number): number;
 	setGain(name: string, value: number): Promise<void>;
 	setGains?(gains: Record<string, number>): Promise<void>;
 	setBandwidth?(bwHz: number): Promise<void>;

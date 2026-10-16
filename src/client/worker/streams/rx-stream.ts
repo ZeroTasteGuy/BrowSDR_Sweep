@@ -41,11 +41,13 @@ ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSI
 
 import * as Comlink from 'comlink';
 import { FFT } from '@/worker/runtime/wasm-init';
-import type { ChannelPlan } from './types';
+import type { ChannelPlan, SpectrumOffset } from './types';
 import type { RxStreamOpts, VfoParams } from '@/worker/runtime/types';
 import type { Backend } from '@/worker/runtime/backend';
+import type { SdrDevice } from '@/radio/types';
 import { displayToDeviceFrequencyHz } from '@/radio/frequency-shift';
 import { spectrumSmoothingAlpha } from '@/display/spectrum-rate';
+import { DcOffsetRemover, offsetTuningBins, offsetTuningHz, shiftSpectrum } from '@/radio/offset-tuning';
 
 let _streamStarting = false;
 
@@ -74,10 +76,8 @@ export async function startRxStream(
 	try {
 		const { device } = backend;
 		if (!device) throw new Error('No device connected');
-		const { centerFreq, frequencyShift = 0, sampleRate, fftSize, gains } = opts;
-
-		await device.setSampleRate(sampleRate);
-		await device.setFrequency(displayToDeviceFrequencyHz(centerFreq, frequencyShift));
+		const { sampleRate, fftSize, gains } = opts;
+		const { tunedOpts, offset } = await tuneWithOffset(backend, device, opts);
 		await configureReceiveGains(device, gains);
 		if (import.meta.env.DEV && device.deviceType === 'limesdr' && gains?.['Receive Mode'] === 1) {
 			return await startUsbOnlyStream(backend, sampleRate);
@@ -110,7 +110,7 @@ export async function startRxStream(
 		// ── Audio DDC setup ───────────────────────────────────────────
 		// Full SDR++ pipeline in Rust: NCO → polyphase resampler (→50kHz)
 		// → channel FIR → squelch → FM demod → post-demod FIR → audio resampler (→48kHz)
-		initializeWorkers(backend, opts, {
+		initializeWorkers(backend, tunedOpts, {
 			rtl433Callback,
 			rdsCallback,
 			dsdStatusCallback,
@@ -164,11 +164,12 @@ export async function startRxStream(
 				specFlip,
 				specFlop,
 				fftSize,
+				offset,
 				spectrumCallback,
 			));
 
 			// Broadcast to DSP workers
-			dispatchIqChunk(backend, sampleRate, centerFreq, channel, perf, signed, chunkCounter);
+			dispatchIqChunk(backend, sampleRate, tunedOpts.centerFreq, channel, perf, signed, chunkCounter);
 		});
 
 		// Reinitialize all remote client DSP workers with the new sample rate
@@ -181,6 +182,18 @@ export async function startRxStream(
 	} finally {
 		_streamStarting = false;
 	}
+}
+
+/** Offset tuning: DSP works on the frequency actually tuned, the spectrum is shifted back to opts.centerFreq. */
+async function tuneWithOffset(backend: Backend, device: SdrDevice, opts: RxStreamOpts) {
+	const { sampleRate, fftSize } = opts;
+	const offsetBins = offsetTuningBins(device.tuningOffsetHz?.(sampleRate) ?? 0, sampleRate, fftSize);
+	backend._tuningOffsetHz = offsetTuningHz(offsetBins, sampleRate, fftSize);
+	const centerFreq = opts.centerFreq + backend._tuningOffsetHz / 1e6;
+	await device.setSampleRate(sampleRate);
+	await device.setFrequency(displayToDeviceFrequencyHz(centerFreq, opts.frequencyShift ?? 0));
+	const dc = offsetBins ? new DcOffsetRemover() : null;
+	return { tunedOpts: { ...opts, centerFreq }, offset: { bins: offsetBins, dc } };
 }
 
 function initializeSpectrum(fftSize: number, backend: Backend) {
@@ -217,6 +230,7 @@ function processSpectrumChunk(
 	specFlip: Float32Array<ArrayBuffer>,
 	specFlop: Float32Array<ArrayBuffer>,
 	fftSize: number,
+	offset: SpectrumOffset,
 	spectrumCallback: SamplesCallback,
 ) {
 	{
@@ -235,6 +249,7 @@ function processSpectrumChunk(
 					lastSpectrumTime = now;
 					// Revert back to copy-based FFT for the spectrum waterfall
 					// because `iqBuffer` batches data across USB chunk boundaries.
+					offset.dc?.process(iqBuffer);
 					spectrumFft.fft(iqBuffer, spectrumOutput);
 
 					// Double buffer the output since Comlink.transfer neuters the buffer on this side.
@@ -246,7 +261,7 @@ function processSpectrumChunk(
 						else specFlop = specCopy;
 					}
 
-					specCopy.set(spectrumOutput);
+					shiftSpectrum(spectrumOutput, specCopy, offset.bins);
 					useFlip = !useFlip;
 
 					// Slice for remote BEFORE Comlink.transfer — transfer detaches specCopy.buffer,

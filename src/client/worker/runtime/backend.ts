@@ -118,7 +118,10 @@ export class Backend {
 
 	// Internal state
 	_sampleRate?: number;
+	/** Tuned centre, including the offset tuning below. */
 	_centerFreq?: number;
+	/** Offset tuning applied to the hardware in normal receive mode. */
+	_tuningOffsetHz = 0;
 	_makeVfoState?: () => VfoState;
 	_spawnWorker?: (index: number, params: VfoParams) => Worker;
 	_handleWorkerAudio?: (v: number, msg: DspAudio) => void;
@@ -378,15 +381,16 @@ export class Backend {
 
 	async setFrequency(centerFreqMhz: number, frequencyShiftMhz = 0): Promise<void> {
 		if (!this.device) throw new Error('No device connected');
+		const tunedFreqMhz = centerFreqMhz + this._tuningOffsetHz / 1e6;
 		this._retuning = true;
 		try {
-			await this.device.setFrequency(displayToDeviceFrequencyHz(centerFreqMhz, frequencyShiftMhz));
+			await this.device.setFrequency(displayToDeviceFrequencyHz(tunedFreqMhz, frequencyShiftMhz));
 		} finally {
 			this._settleUntil = performance.now() + 50;
 			this._retuning = false;
 		}
 
-		this._centerFreq = centerFreqMhz;
+		this._centerFreq = tunedFreqMhz;
 
 		if (this.vfoParams && this.dspWorkers) {
 			for (let i = 0; i < this.vfoParams.length; i++) {
