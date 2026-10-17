@@ -4,6 +4,11 @@ import { VitePWA } from 'vite-plugin-pwa';
 import path from 'path';
 import fs from 'fs';
 
+// Public path the app is served from: '/' on Cloudflare, '/BrowSDR_Sweep/' on GitHub Pages.
+const base = (process.env.BROWSDR_BASE ?? '/').replace(/\/?$/, '/');
+// The WASM bundles are external imports written as '/wasm/...'; point them under the base.
+const wasmPaths = (id: string) => (id.startsWith('/wasm/') ? base + id.slice(1) : id);
+
 // Plugin that runs after the main build to:
 // 1. Bundle the dsp-worker properly (Vite doesn't bundle nested workers)
 // 2. Copy WASM files to dist
@@ -42,9 +47,11 @@ function postBuildPlugin(): Plugin {
 							},
 							rollupOptions: {
 								external: [/^\/wasm\//],
+								output: { paths: wasmPaths },
 							},
 							minify: true,
 						},
+						base,
 						resolve: {
 							alias: sourceAlias,
 						},
@@ -77,6 +84,7 @@ function postBuildPlugin(): Plugin {
 				await build({
 					resolve: { alias: sourceAlias },
 					configFile: false,
+					base,
 					root: path.resolve(__dirname, 'src/client'),
 					build: {
 						outDir: distDir,
@@ -105,17 +113,20 @@ function postBuildPlugin(): Plugin {
 
 export default defineConfig({
 	root: 'src/client',
+	base,
 	build: {
 		outDir: path.resolve(__dirname, 'dist'),
 		emptyOutDir: true,
 		rollupOptions: {
 			external: [/^\/wasm\//],
+			output: { paths: wasmPaths },
 		},
 	},
 	worker: {
 		format: 'es',
 		rollupOptions: {
 			external: [/^\/wasm\//],
+			output: { paths: wasmPaths },
 		},
 	},
 	plugins: [
@@ -148,10 +159,11 @@ export default defineConfig({
 				theme_color: '#0f0f1a',
 				background_color: '#0f0f1a',
 				display: 'standalone',
-				start_url: '/',
+				start_url: base,
+				scope: base,
 				icons: [
-					{ src: '/icon-192.png', sizes: '192x192', type: 'image/png' },
-					{ src: '/icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'any maskable' },
+					{ src: `${base}icon-192.png`, sizes: '192x192', type: 'image/png' },
+					{ src: `${base}icon-512.png`, sizes: '512x512', type: 'image/png', purpose: 'any maskable' },
 				],
 			},
 		}),

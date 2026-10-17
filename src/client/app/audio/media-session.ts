@@ -45,7 +45,11 @@ export class WorkspaceMediaSession {
 			session.metadata = new MediaMetadata({
 				title: 'BrowSDR',
 				artist: running.length ? `Receiving on ${running.length} SDR${running.length === 1 ? '' : 's'}` : 'Reception paused',
-				artwork: [96, 192, 512].map((size) => ({ src: `/icon-${size}.png`, sizes: `${size}x${size}`, type: 'image/png' })),
+				artwork: [96, 192, 512].map((size) => ({
+					src: `${import.meta.env.BASE_URL}icon-${size}.png`,
+					sizes: `${size}x${size}`,
+					type: 'image/png',
+				})),
 			});
 		session.playbackState = running.length ? 'playing' : 'paused';
 	}

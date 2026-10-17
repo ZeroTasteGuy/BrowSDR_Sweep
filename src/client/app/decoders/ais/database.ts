@@ -29,7 +29,7 @@ export async function loadMids(): Promise<Record<string, string> | undefined> {
 	} catch {
 		/* Browser storage can be unavailable. */
 	}
-	for (const url of [remote, new URL('/maritime-db/mids.json', location.href).href]) {
+	for (const url of [remote, new URL(`${import.meta.env.BASE_URL}maritime-db/mids.json`, location.href).href]) {
 		try {
 			const response = await fetch(url, { signal: AbortSignal.timeout(8000), cache: 'no-cache' });
 			if (!response.ok) continue;
