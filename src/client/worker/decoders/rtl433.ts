@@ -21,7 +21,10 @@ let factoryPromise: Promise<RtlFactory> | undefined;
 async function loadFactory(): Promise<RtlFactory> {
 	// Load the committed Emscripten ES module as a static asset in dev and production.
 	// Absolute HTTP URLs bypass Vite's source-import query rewriting for public assets.
-	const url = typeof location === 'undefined' ? '/wasm/rtl433/rtl433.js' : new URL('/wasm/rtl433/rtl433.js', location.origin).href;
+	const url =
+		typeof location === 'undefined'
+			? `${import.meta.env.BASE_URL}wasm/rtl433/rtl433.js`
+			: new URL(`${import.meta.env.BASE_URL}wasm/rtl433/rtl433.js`, location.origin).href;
 	factoryPromise ??= import(/* @vite-ignore */ url)
 		.then((module: unknown) => {
 			if (!isRecord(module) || typeof module.default !== 'function') throw new Error('Missing rtl_433 factory');
@@ -51,7 +54,7 @@ export class Rtl433Decoder {
 	): Promise<Rtl433Decoder> {
 		const factory = await loadFactory();
 		const module: RtlModule = await factory({
-			locateFile: (path: string) => '/wasm/rtl433/' + path,
+			locateFile: (path: string) => `${import.meta.env.BASE_URL}wasm/rtl433/${path}`,
 			onDecoded: (json: string) => {
 				const event: unknown = JSON.parse(json);
 				if (isRecord(event)) onEvent(event);

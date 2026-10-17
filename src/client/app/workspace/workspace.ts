@@ -395,7 +395,7 @@ async function startSharing(this: WorkspaceInstance, runtime: WorkspaceRuntime) 
 		if (status.status === 'ready') {
 			const code = status.id.replace(PEER_ID_PREFIX, '');
 			localStorage.setItem('browsdr-share-code', code);
-			this.shareLink = `${window.location.origin}/?connect=${code}`;
+			this.shareLink = `${window.location.origin}${import.meta.env.BASE_URL}?connect=${code}`;
 		}
 		if (status.status === 'client-connected') this.broadcastReceivers(status.clientId);
 		for (const app of runtime.instances.values()) {

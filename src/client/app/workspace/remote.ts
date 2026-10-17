@@ -49,7 +49,7 @@ export const remoteMethods = {
 				const origin = window.location.origin;
 				const shortId = status.id.replace(PEER_ID_PREFIX, '');
 				localStorage.setItem('browsdr-share-code', shortId);
-				this.remoteLink = `${origin}/?connect=${shortId}`;
+				this.remoteLink = `${origin}${import.meta.env.BASE_URL}?connect=${shortId}`;
 				console.log('[WebRTC] Link completely generated:', this.remoteLink);
 			} else if (status.status === 'client-connected') {
 				const clientId = status.clientId;

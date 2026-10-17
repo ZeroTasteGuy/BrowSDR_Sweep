@@ -350,9 +350,9 @@ export const connectionMethods = {
 				title: 'BrowSDR',
 				artist: 'Receiving',
 				artwork: [
-					{ src: '/icon-96.png', sizes: '96x96', type: 'image/png' },
-					{ src: '/icon-192.png', sizes: '192x192', type: 'image/png' },
-					{ src: '/icon-512.png', sizes: '512x512', type: 'image/png' },
+					{ src: `${import.meta.env.BASE_URL}icon-96.png`, sizes: '96x96', type: 'image/png' },
+					{ src: `${import.meta.env.BASE_URL}icon-192.png`, sizes: '192x192', type: 'image/png' },
+					{ src: `${import.meta.env.BASE_URL}icon-512.png`, sizes: '512x512', type: 'image/png' },
 				],
 			});
 			navigator.mediaSession.playbackState = 'playing';
