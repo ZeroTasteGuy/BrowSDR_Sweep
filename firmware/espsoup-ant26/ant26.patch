@@ -1,0 +1,36 @@
+diff --git a/main/families/c5_c6_c61/receiver.c b/main/families/c5_c6_c61/receiver.c
+index 2b118af..4a026d3 100644
+--- a/main/families/c5_c6_c61/receiver.c
++++ b/main/families/c5_c6_c61/receiver.c
+@@ -4,6 +4,18 @@
+ #include <stdio.h>
+ #include <string.h>
+ #include "driver/usb_serial_jtag.h"
++#if CONFIG_IDF_TARGET_ESP32C5
++#include "driver/gpio.h"
++
++/* ESPSOUP_ANT_GPIO: Waveshare ESP32-C5-Zero antenna switch.
++ * 1 = external antenna (IPEX), 0 = onboard ceramic antenna. */
++#ifndef ESPSOUP_ANT_GPIO
++#define ESPSOUP_ANT_GPIO 26
++#endif
++#ifndef ESPSOUP_ANT_LEVEL
++#define ESPSOUP_ANT_LEVEL 1
++#endif
++#endif
+ #include "esp_cpu.h"
+ #include "esp_event.h"
+ #include "esp_log.h"
+@@ -254,6 +266,12 @@ static bool ring_test(const char *line) {
+ static void handle_command(char *line);
+ 
+ void app_main(void) {
++#if CONFIG_IDF_TARGET_ESP32C5
++    /* ESPSOUP_ANT_GPIO: select the antenna before the radio starts. */
++    gpio_reset_pin(ESPSOUP_ANT_GPIO);
++    gpio_set_direction(ESPSOUP_ANT_GPIO, GPIO_MODE_OUTPUT);
++    gpio_set_level(ESPSOUP_ANT_GPIO, ESPSOUP_ANT_LEVEL);
++#endif
+ 
+     esp_log_level_set("*",ESP_LOG_NONE);
+     esp_err_t e=nvs_flash_init();
