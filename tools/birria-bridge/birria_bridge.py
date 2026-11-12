@@ -11,7 +11,7 @@ Run:  python birria_bridge.py [--lib DIR] [--port 8075] [--fake]
 Needs numpy, and birriasdr.dll, birria_display.dll and libusb-1.0.dll from a
 BirriaSDR Windows build (or the .so files on Linux).
 """
-import argparse, base64, ctypes as C, hashlib, json, os, socket, struct, sys, threading, time
+import argparse, base64, ctypes as C, hashlib, json, os, queue, socket, struct, sys, threading, time
 from pathlib import Path
 import numpy as np
 
@@ -23,6 +23,8 @@ DEFAULT_FFT_SIZE = 65536  # BrowSDR's level reference
 LIVE_SAMPLES = CAPTURE
 BATCH = CAPTURE           # samples per native callback (--batch)
 SETTLE_US = 500           # discarded after each retune (--settle-us)
+PIPELINE = False          # FFT+send on a worker thread (--pipeline)
+READ_PRIORITY = 1         # Windows priority of the native read thread (--read-priority; 1 = above normal)
 FLAGS = 1 | 2             # OPEN_EXPERIMENTAL_MT7961 | OPEN_EXPERIMENTAL_TUNING (| 4 for 80 MS/s)
 
 
@@ -70,16 +72,23 @@ class Stick:
         L.birriasdr_read_async.restype = C.c_int
         self.box = disp.bs_display_create()
         self.scratch = np.empty((262144, 2), np.int16)
-        self.dev = P()
         self.generation = 0
+        self.center, self.gain = 5_695_000_000, (1, 4, 0)
+        self.delivered = self.reopened = False     # for the one automatic reopen, see take()
+        self.lock = threading.Lock()
+        self._open()
+
+    def _open(self):
+        L = self.lib
+        self.dev = C.c_void_p()
         self.error = None
         self.check(L.birriasdr_open_ex(C.byref(self.dev), 0, FLAGS))
         self.check(L.birriasdr_set_sample_rate(self.dev, RATE))
         if RATE == 80_000_000:
             self.check(L.birriasdr_set_tuner_bandwidth(self.dev, RATE))
         self.check(L.birriasdr_set_tuner_gain_mode(self.dev, 1))
-        self.set_gain(1, 4, 0)
-        self.check(L.birriasdr_set_center_freq(self.dev, 5_695_000_000))
+        self.check(L.birriasdr_set_gain_codes(self.dev, C.byref(Gain(*self.gain))))
+        self.check(L.birriasdr_set_center_freq(self.dev, self.center))
         self.configure(LIVE_SAMPLES)
         self.reader = threading.Thread(target=self._read, daemon=True)
         self.reader.start()
@@ -92,10 +101,22 @@ class Stick:
         # The display mailbox's native callback, with small buffers: a fresh window every 0.41 ms
         # instead of every 6.5 ms, and nothing crosses into Python per callback.
         callback = C.cast(self.disp.bs_display_callback, C.c_void_p)
+        if os.name == 'nt' and READ_PRIORITY:      # like stream_bridge's bs_display_read
+            k = C.windll.kernel32
+            k.GetCurrentThread.restype = C.c_void_p
+            k.SetThreadPriority.argtypes = [C.c_void_p, C.c_int]
+            k.SetThreadPriority(k.GetCurrentThread(), READ_PRIORITY)
         code = self.lib.birriasdr_read_async(self.dev, callback, self.box, 0, BATCH)
         if code < 0:
             self.error = self.lib.birriasdr_strerror(code).decode()
             print('stream stopped:', self.error, flush=True)
+            st = (C.c_uint8 * 48)()          # struct birriasdr_stream_stats
+            if self.lib.birriasdr_get_stream_stats(self.dev, st) == 0:
+                b = bytes(st)
+                samples, packets, usb = struct.unpack_from('<3Q', b)
+                state, dma, stage, reset = struct.unpack_from('<IIii', b, 24)
+                print(f'  stream stats: samples {samples}, packets {packets}, usb bytes {usb}, '
+                      f'firmware state {state}, dma errors {dma}, stage {stage}', flush=True)
 
     def configure(self, size):
         self.generation += 1
@@ -107,11 +128,14 @@ class Stick:
         return out[0]
 
     def tune(self, hz):
-        self.check(self.lib.birriasdr_set_center_freq(self.dev, int(hz)))
+        with self.lock:
+            self.check(self.lib.birriasdr_set_center_freq(self.dev, int(hz)))
+            self.center = int(hz)
 
     def set_gain(self, lna, lpf, digital):
-        g = Gain(lna, lpf, digital)
-        self.check(self.lib.birriasdr_set_gain_codes(self.dev, C.byref(g)))
+        with self.lock:
+            self.check(self.lib.birriasdr_set_gain_codes(self.dev, C.byref(Gain(lna, lpf, digital))))
+            self.gain = (lna, lpf, digital)
 
     def take(self, size, after=0, timeout=0.5):
         """Next published window of `size` samples starting at or after sample `after`."""
@@ -120,10 +144,22 @@ class Stick:
         end = time.monotonic() + timeout
         while time.monotonic() < end:
             if self.error:
-                raise RuntimeError('stream stopped: ' + self.error)
+                if self.delivered or self.reopened:
+                    raise RuntimeError('stream stopped: ' + self.error)
+                # The stick sometimes overruns right at stream start, before any data arrived:
+                # close and reopen it once (same frequency and gain), then carry on.
+                print('stream failed at startup, reopening the device once', flush=True)
+                self.reopened = True
+                with self.lock:
+                    self.close()
+                    self._open()
+                self.configure(size)
+                after, end = 0, time.monotonic() + timeout + 1
+                continue
             r = self.disp.bs_display_take(self.box, self.scratch.ctypes.data_as(C.POINTER(C.c_int16)),
                                           len(self.scratch), C.byref(count), C.byref(first), C.byref(gen))
             if r == 1 and gen.value == self.generation and first.value >= after:
+                self.delivered = True
                 return self.scratch[:count.value].copy()
             if r == 1:
                 self.configure(size)               # too early: re-arm, or the mailbox waits 50 ms
@@ -164,7 +200,11 @@ class Session:
         self.range = (5600, 6000)
         self.fft_size = 1024
         self.settle = SETTLE_US * RATE // 1_000_000   # samples discarded after a retune
-        self.stats, self.last_report = [], 0.0
+        self.stats, self.work, self.last_report = [], [], 0.0
+        # With --pipeline, FFT+send run on their own thread, so the next retune starts as soon as
+        # take() returns. One worker keeps the steps in order; at most two steps wait for it.
+        self.jobs = queue.Queue(maxsize=2)
+        threading.Thread(target=self._work, daemon=True).start()
 
     def command(self, msg):
         cmd = msg.get('cmd')
@@ -199,10 +239,11 @@ class Session:
                 else:
                     time.sleep(0.02)
             except (OSError, ConnectionError):
-                return
+                break
             except Exception as e:
                 self.ws.send_text(json.dumps({'type': 'error', 'message': str(e)}))
                 self.mode = 'idle'
+        self.jobs.put(None)                         # ends the FFT worker
 
     def sweep_once(self):
         """One pass in SPAN_HZ steps. Each step is sent as a uint64 start frequency (Hz) of its
@@ -211,8 +252,8 @@ class Session:
         fft_size = self.fft_size * RATE // 20_000_000   # same bin width as fft_size at 20 MS/s
         bin_hz = RATE / fft_size
         keep = int(SPAN_HZ / bin_hz) // 2 * 2
-        window = np.hanning(fft_size)
-        offset_db = 10 * np.log10(self.fft_size / DEFAULT_FFT_SIZE)
+        plan = (fft_size, bin_hz, keep, np.hanning(fft_size), 10 * np.log10(self.fft_size / DEFAULT_FFT_SIZE))
+        capture = max(CAPTURE, fft_size)
         f = start * 1_000_000
         while self.mode == 'sweep' and f < stop * 1_000_000 and self.ws.open:
             centre = f + keep // 2 * bin_hz
@@ -221,23 +262,41 @@ class Session:
                 self.stick.tune(centre)
                 mark = self.stick.samples() + self.settle
             t1 = time.perf_counter()
-            iq = self.stick.take(CAPTURE, after=mark)
+            iq = self.stick.take(capture, after=mark)
             t2 = time.perf_counter()
-            x = (iq[:, 0] + 1j * iq[:, 1]).astype(np.complex64) / FULL_SCALE
-            frames = x[: len(x) // fft_size * fft_size].reshape(-1, fft_size)
-            power = np.mean(np.abs(np.fft.fftshift(np.fft.fft(frames * window, axis=1), axes=1)) ** 2, axis=0)
-            db = 10 * np.log10(power / fft_size ** 2 + 1e-20) + offset_db
-            lo = fft_size // 2 - keep // 2
-            first_hz = centre + (lo - fft_size // 2) * bin_hz
-            self.ws.send_binary(struct.pack('<Q', int(round(first_hz))) + db[lo:lo + keep].astype('<f4').tobytes())
-            self.stats.append((t1 - t0, t2 - t1, time.perf_counter() - t2))
+            if PIPELINE:
+                self.jobs.put((centre, iq, plan))   # waits only if the worker is two steps behind
+            else:
+                self.fft_send(centre, iq, plan)
+            self.stats.append((t1 - t0, t2 - t1))
             f += keep * bin_hz
         self.report()
+
+    def _work(self):
+        while (job := self.jobs.get()) is not None:
+            self.fft_send(*job)
+
+    def fft_send(self, centre, iq, plan):
+        t = time.perf_counter()
+        fft_size, bin_hz, keep, window, offset_db = plan
+        x = (iq[:, 0] + 1j * iq[:, 1]).astype(np.complex64) / FULL_SCALE
+        frames = x[: len(x) // fft_size * fft_size].reshape(-1, fft_size)
+        power = np.mean(np.abs(np.fft.fftshift(np.fft.fft(frames * window, axis=1), axes=1)) ** 2, axis=0)
+        db = 10 * np.log10(power / fft_size ** 2 + 1e-20) + offset_db
+        lo = fft_size // 2 - keep // 2
+        first_hz = centre + (lo - fft_size // 2) * bin_hz
+        try:
+            self.ws.send_binary(struct.pack('<Q', int(round(first_hz))) + db[lo:lo + keep].astype('<f4').tobytes())
+        except (OSError, ConnectionError):
+            pass
+        self.work.append(time.perf_counter() - t)
 
     def report(self):
         now = time.monotonic()
         if self.stats and now - self.last_report > 2:
-            tune, wait, work = (1000 * sum(v) / len(self.stats) for v in zip(*self.stats))
+            tune, wait = (1000 * sum(v) / len(self.stats) for v in zip(*self.stats))
+            work = 1000 * sum(self.work) / max(len(self.work), 1)
+            self.work.clear()
             print(f'per step: retune {tune:.2f} ms, wait for samples {wait:.2f} ms, FFT+send {work:.2f} ms', flush=True)
             self.stats.clear()
             self.last_report = now
@@ -353,6 +412,7 @@ def serve(stick, port):
 
 
 def main():
+    global RATE, SPAN_HZ, FLAGS, BATCH, SETTLE_US, CAPTURE, LIVE_SAMPLES, READ_PRIORITY, PIPELINE
     ap = argparse.ArgumentParser(description=__doc__.split('\n')[0])
     ap.add_argument('--lib', type=Path, help='folder with birriasdr.dll, birria_display.dll, libusb-1.0.dll')
     ap.add_argument('--port', type=int, default=8075)
@@ -360,11 +420,18 @@ def main():
     ap.add_argument('--rate', type=int, choices=(40, 80), default=40,
                     help='MS/s; 80 is experimental (70 MHz per sweep step, needs a fast USB 3 port)')
     ap.add_argument('--batch', type=int, default=CAPTURE,
-                    help='samples per native callback, multiple of 2048 (larger can avoid overruns at 80 MS/s)')
+                    help='samples per native callback, multiple of 2048, at least --capture '
+                         '(larger can avoid overruns at 80 MS/s)')
+    ap.add_argument('--capture', type=int, default=CAPTURE,
+                    help='samples taken per sweep step, multiple of 2048 (smaller = shorter wait, fewer averages)')
+    ap.add_argument('--pipeline', action='store_true',
+                    help='FFT+send on a worker thread (measured slower on a 40 MS/s sweep: retunes slow down)')
+    ap.add_argument('--read-priority', type=int, default=READ_PRIORITY,
+                    help='Windows thread priority of the native reader (0 normal, 1 above normal, 2 highest)')
     ap.add_argument('--settle-us', type=int, default=500, help='microseconds discarded after each retune')
     args = ap.parse_args()
-    global RATE, SPAN_HZ, FLAGS, BATCH, SETTLE_US
-    SETTLE_US = args.settle_us
+    SETTLE_US, READ_PRIORITY, PIPELINE = args.settle_us, args.read_priority, args.pipeline
+    CAPTURE = LIVE_SAMPLES = max(2048, args.capture // 2048 * 2048)
     BATCH = max(CAPTURE, args.batch // 2048 * 2048)
     if args.rate == 80:
         RATE, SPAN_HZ, FLAGS = 80_000_000, 70_000_000, FLAGS | 4
