@@ -74,7 +74,7 @@ class Stick:
         self.scratch = np.empty((262144, 2), np.int16)
         self.generation = 0
         self.center, self.gain = 5_695_000_000, (1, 4, 0)
-        self.delivered = self.reopened = False     # for the one automatic reopen, see take()
+        self.restarts = []                         # times of recent automatic restarts
         self.lock = threading.Lock()
         self._open()
 
@@ -92,6 +92,23 @@ class Stick:
         self.configure(LIVE_SAMPLES)
         self.reader = threading.Thread(target=self._read, daemon=True)
         self.reader.start()
+
+    def ensure_stream(self):
+        """Reopen the device (same frequency and gain) if the native stream has stopped.
+        The stick sometimes overruns (firmware state 9), e.g. right after start with nobody
+        connected; a client command or take() then restarts it, at most 3 times a minute."""
+        if not self.error:
+            return
+        now = time.monotonic()
+        self.restarts = [t for t in self.restarts if now - t < 60]
+        if len(self.restarts) >= 3:
+            raise RuntimeError(f'stream stopped: {self.error} (already restarted 3 times this minute)')
+        reason = self.error
+        self.restarts.append(now)
+        with self.lock:
+            self.close()
+            self._open()
+        print('stream restarted after:', reason, flush=True)
 
     def check(self, code):
         if code < 0:
@@ -144,22 +161,13 @@ class Stick:
         end = time.monotonic() + timeout
         while time.monotonic() < end:
             if self.error:
-                if self.delivered or self.reopened:
-                    raise RuntimeError('stream stopped: ' + self.error)
-                # The stick sometimes overruns right at stream start, before any data arrived:
-                # close and reopen it once (same frequency and gain), then carry on.
-                print('stream failed at startup, reopening the device once', flush=True)
-                self.reopened = True
-                with self.lock:
-                    self.close()
-                    self._open()
+                self.ensure_stream()               # raises if it keeps failing
                 self.configure(size)
                 after, end = 0, time.monotonic() + timeout + 1
                 continue
             r = self.disp.bs_display_take(self.box, self.scratch.ctypes.data_as(C.POINTER(C.c_int16)),
                                           len(self.scratch), C.byref(count), C.byref(first), C.byref(gen))
             if r == 1 and gen.value == self.generation and first.value >= after:
-                self.delivered = True
                 return self.scratch[:count.value].copy()
             if r == 1:
                 self.configure(size)               # too early: re-arm, or the mailbox waits 50 ms
@@ -178,6 +186,7 @@ class FakeStick:
         self.center, self.n, self.rng = 5_695_000_000, 0, np.random.default_rng()
 
     def tune(self, hz): self.center = int(hz)
+    def ensure_stream(self): pass
     def set_gain(self, *g): pass
     def samples(self): return self.n
     def close(self): pass
@@ -216,11 +225,13 @@ class Session:
                 if self.mode == 'rx':
                     self.stick.tune(self.center)
             elif cmd == 'rx':
+                self.stick.ensure_stream()
                 self.mode = 'rx'
                 self.stick.tune(self.center)
             elif cmd == 'sweep':
                 self.range = (int(msg['startMHz']), int(msg['stopMHz']))
                 self.fft_size = min(4096, max(16, int(msg.get('fftSize', 1024))))
+                self.stick.ensure_stream()
                 self.mode = 'sweep'
             elif cmd == 'stop':
                 self.mode = 'idle'
