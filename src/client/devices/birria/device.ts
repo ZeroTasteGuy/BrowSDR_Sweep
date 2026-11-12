@@ -6,7 +6,7 @@ export const BIRRIA_BRIDGE_URL = 'ws://127.0.0.1:8075';
 /**
  * MT7921AU/MT7961 Wi-Fi stick through the local BirriaSDR bridge. Windows needs libusbK for
  * this stick, which WebUSB can't use, so the bridge opens it natively and streams over a
- * localhost WebSocket. Sweep steps arrive already FFT'd (BirriaSweepAssembler). Live receive gets 65536-sample snapshots, not a gap-free
+ * localhost WebSocket. Sweep steps arrive already FFT'd (BirriaSweepAssembler). Live receive gets 16384-sample snapshots, not a gap-free
  * stream: good for spectrum and waterfall, not for demodulation.
  */
 export class BirriaBridgeDevice implements SdrDevice {
@@ -75,10 +75,28 @@ export class BirriaBridgeDevice implements SdrDevice {
 		return this.send({ cmd: 'gain', ...this.gains });
 	}
 
-	/** Live snapshots are int16 I/Q. */
+	/**
+	 * Live snapshots arrive as int16 I/Q (14-bit samples), but the receive pipeline reads
+	 * int8 I/Q. Scale with a slow AGC so weak signals keep their resolution without
+	 * clipping: a fixed shift would round most of the stick's low-level samples to zero.
+	 */
 	startRx(callback: (data: ArrayBufferView) => void): Promise<void> {
-		this.onData = (data) => callback(new Int16Array(data.buffer));
+		this.liveScale = 0;
+		this.onData = (data) => callback(this.toInt8(new Int16Array(data.buffer, data.byteOffset, data.byteLength >> 1)));
 		return this.send({ cmd: 'rx' });
+	}
+
+	private liveScale = 0;
+
+	private toInt8(samples: Int16Array): Int8Array {
+		let peak = 1;
+		for (const value of samples) peak = Math.max(peak, Math.abs(value));
+		const target = 100 / peak;
+		// Drop at once when the snapshot would clip, otherwise follow slowly.
+		this.liveScale = this.liveScale === 0 || target < this.liveScale ? target : this.liveScale * 0.95 + target * 0.05;
+		const out = new Int8Array(samples.length);
+		for (let i = 0; i < samples.length; i++) out[i] = Math.max(-127, Math.min(127, Math.round(samples[i] * this.liveScale)));
+		return out;
 	}
 
 	/** The bridge FFTs each step itself at the plan's bin width; see BirriaSweepAssembler. */
