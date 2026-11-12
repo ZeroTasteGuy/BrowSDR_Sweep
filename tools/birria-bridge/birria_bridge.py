@@ -313,8 +313,13 @@ def serve(stick, port):
     srv.bind(('127.0.0.1', port))
     srv.listen(1)
     print(f'BirriaSDR bridge running on ws://127.0.0.1:{port} - keep this window open.', flush=True)
+    srv.settimeout(0.5)                        # lets Ctrl+C through on Windows
     while True:
-        conn, _ = srv.accept()
+        try:
+            conn, _ = srv.accept()
+        except socket.timeout:
+            continue
+        conn.settimeout(None)
         conn.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
         ws = WebSocket.accept(conn)
         if not ws:
@@ -324,11 +329,16 @@ def serve(stick, port):
         session = Session(stick, ws)
         worker = threading.Thread(target=session.run, daemon=True)
         worker.start()
-        while (text := ws.receive()) is not None:
-            try:
-                session.command(json.loads(text))
-            except Exception as e:
-                ws.send_text(json.dumps({'type': 'error', 'message': str(e)}))
+        def commands():
+            while (text := ws.receive()) is not None:
+                try:
+                    session.command(json.loads(text))
+                except Exception as e:
+                    ws.send_text(json.dumps({'type': 'error', 'message': str(e)}))
+        reader = threading.Thread(target=commands, daemon=True)
+        reader.start()
+        while reader.is_alive():
+            reader.join(0.5)                   # short waits keep Ctrl+C working
         session.mode = 'idle'
         worker.join(2)
         conn.close()
