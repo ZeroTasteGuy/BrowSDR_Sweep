@@ -40,7 +40,8 @@ export class BirriaBridgeDevice implements SdrDevice {
 		ws.binaryType = 'arraybuffer';
 		await new Promise<void>((resolve, reject) => {
 			ws.onopen = () => resolve();
-			ws.onerror = () => reject(new Error('BirriaSDR bridge not running. Start BirriaSweep (START_BRIDGE_ONLY or START_WITH_PAGE) and try again.'));
+			ws.onerror = () =>
+				reject(new Error('BirriaSDR bridge not running. Start BirriaSweep (START_BRIDGE_ONLY or START_WITH_PAGE) and try again.'));
 		});
 		ws.onmessage = (event) => {
 			if (typeof event.data === 'string') {
