@@ -67,7 +67,7 @@ export class BirriaBridgeDevice implements SdrDevice {
 	}
 
 	getInfo(): Promise<SdrDeviceInfo> {
-		return Promise.resolve({ name: 'BirriaSDR Wi-Fi stick (bridge)', protocol: BIRRIA_BRIDGE_URL });
+		return Promise.resolve({ name: 'BirriaSDR Wi-Fi stick (bridge)', protocol: birriaBridgeUrl() });
 	}
 
 	/** Fixed at 40 MS/s. */
