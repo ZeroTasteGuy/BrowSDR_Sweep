@@ -95,7 +95,7 @@
 
 				<UiPanel label="Sweep" v-if="sweepAvailable()" v-model:collapsed="collapsedPanels['sweep']">
 					<UiFormRow>
-						<UiCheckbox variant="native" v-model="sweep.enabled" label="Sweep mode (HackRF)" style="flex:1" :disabled="remoteMode !== 'none'"></UiCheckbox>
+						<UiCheckbox variant="native" v-model="sweep.enabled" label="Sweep mode" style="flex:1" :disabled="remoteMode !== 'none'"></UiCheckbox>
 					</UiFormRow>
 					<p v-if="remoteMode !== 'none'" class="sweep-note" role="status">Sweep is unavailable while sharing. Stop sharing to use it.</p>
 					<template v-if="sweep.enabled">

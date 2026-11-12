@@ -128,7 +128,8 @@ export interface ReceiverMethods {
 	connectToDevice(device: USBDevice): Promise<void>;
 	_connectToDevice(device: USBDevice, deviceIndex?: number): Promise<void>;
 	connectMock(): Promise<void>;
-	_connectMock(): Promise<void>;
+	_connectMock(kind?: 'mock' | 'birria'): Promise<void>;
+	connectBirria(): Promise<void>;
 	disconnect(): Promise<void>;
 	_disconnectReceiver(): Promise<void>;
 	_releaseWakeLock(): void;

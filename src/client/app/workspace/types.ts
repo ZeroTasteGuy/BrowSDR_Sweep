@@ -34,7 +34,7 @@ export interface WorkspaceInstance extends WorkspaceData {
 	selectReceiver(id: string): void;
 	addDevice(): Promise<void>;
 	isDeviceConnected(device: USBDevice): boolean;
-	connectDevice(source: AppInstance, device: USBDevice | 'mock'): Promise<void>;
+	connectDevice(source: AppInstance, device: USBDevice | 'mock' | 'birria'): Promise<void>;
 	removeReceiver(id: string): Promise<void>;
 	broadcastReceivers(clientId?: string): void;
 	attachHostReceiver(app: AppInstance): Promise<void>;

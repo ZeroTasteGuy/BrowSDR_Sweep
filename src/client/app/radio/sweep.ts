@@ -67,9 +67,9 @@ export const sweepMethods = {
 			return errorMessage(error);
 		}
 	},
-	/** Sweep runs the HackRF's own firmware sweep, so it is offered for HackRF only. */
+	/** Sweep runs the HackRF's own firmware sweep, or the BirriaSDR bridge's emulation of it. */
 	sweepAvailable(this: AppInstance) {
-		return this.connected && this.deviceCapabilities?.deviceType === 'hackrf' && this.remoteMode !== 'client';
+		return this.connected && ['hackrf', 'birria'].includes(this.deviceCapabilities?.deviceType ?? '') && this.remoteMode !== 'client';
 	},
 	/** Sweep is on by default, but only takes effect on a HackRF; other devices stream as usual. */
 	sweepMode(this: AppInstance) {
