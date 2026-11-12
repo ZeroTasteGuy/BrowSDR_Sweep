@@ -21,6 +21,7 @@ SPAN_HZ = 35_000_000      # used per step: the flat middle of the filter (70 MHz
 FULL_SCALE = 8192.0       # 14-bit samples
 DEFAULT_FFT_SIZE = 65536  # BrowSDR's level reference
 LIVE_SAMPLES = CAPTURE
+BATCH = CAPTURE           # samples per native callback (--batch)
 FLAGS = 1 | 2             # OPEN_EXPERIMENTAL_MT7961 | OPEN_EXPERIMENTAL_TUNING (| 4 for 80 MS/s)
 
 
@@ -90,7 +91,7 @@ class Stick:
         # The display mailbox's native callback, with small buffers: a fresh window every 0.41 ms
         # instead of every 6.5 ms, and nothing crosses into Python per callback.
         callback = C.cast(self.disp.bs_display_callback, C.c_void_p)
-        code = self.lib.birriasdr_read_async(self.dev, callback, self.box, 0, CAPTURE)
+        code = self.lib.birriasdr_read_async(self.dev, callback, self.box, 0, BATCH)
         if code < 0:
             self.error = self.lib.birriasdr_strerror(code).decode()
             print('stream stopped:', self.error, flush=True)
@@ -357,8 +358,11 @@ def main():
     ap.add_argument('--fake', action='store_true', help='synthetic tones, no stick needed')
     ap.add_argument('--rate', type=int, choices=(40, 80), default=40,
                     help='MS/s; 80 is experimental (70 MHz per sweep step, needs a fast USB 3 port)')
+    ap.add_argument('--batch', type=int, default=CAPTURE,
+                    help='samples per native callback, multiple of 2048 (larger can avoid overruns at 80 MS/s)')
     args = ap.parse_args()
-    global RATE, SPAN_HZ, FLAGS
+    global RATE, SPAN_HZ, FLAGS, BATCH
+    BATCH = max(CAPTURE, args.batch // 2048 * 2048)
     if args.rate == 80:
         RATE, SPAN_HZ, FLAGS = 80_000_000, 70_000_000, FLAGS | 4
     if args.fake:
