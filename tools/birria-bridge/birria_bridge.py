@@ -120,6 +120,8 @@ class Stick:
                                           len(self.scratch), C.byref(count), C.byref(first), C.byref(gen))
             if r == 1 and gen.value == self.generation and first.value >= after:
                 return self.scratch[:count.value].copy()
+            if r == 1:
+                self.configure(size)               # too early: re-arm, or the mailbox waits 50 ms
             time.sleep(0.0002)
         raise TimeoutError('no samples from the stick')
 
