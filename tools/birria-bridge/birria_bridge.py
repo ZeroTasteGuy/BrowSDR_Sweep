@@ -75,6 +75,9 @@ class Stick:
         self.generation = 0
         self.center, self.gain = 5_695_000_000, (1, 4, 0)
         self.restarts = []                         # times of recent automatic restarts
+        # Debug: BIRRIA_FORCE_RESTART_S=N marks the stream as stopped once, N s after opening.
+        self.force_restart_at = (time.monotonic() + float(os.environ['BIRRIA_FORCE_RESTART_S'])
+                                 if os.environ.get('BIRRIA_FORCE_RESTART_S') else None)
         self.lock = threading.Lock()
         self._open()
 
@@ -89,7 +92,8 @@ class Stick:
         self.check(L.birriasdr_set_tuner_gain_mode(self.dev, 1))
         self.check(L.birriasdr_set_gain_codes(self.dev, C.byref(Gain(*self.gain))))
         self.check(L.birriasdr_set_center_freq(self.dev, self.center))
-        self.configure(LIVE_SAMPLES)
+        # A new stream numbers its samples from 0 again: restart the mailbox count to match.
+        self.configure(LIVE_SAMPLES, reset_counters=1)
         self.reader = threading.Thread(target=self._read, daemon=True)
         self.reader.start()
 
@@ -108,6 +112,10 @@ class Stick:
         with self.lock:
             self.close()
             self._open()
+        # A fresh stream needs a moment (firmware boot) before samples flow again.
+        start, deadline = self.samples(), time.monotonic() + 5
+        while self.samples() == start and not self.error and time.monotonic() < deadline:
+            time.sleep(0.01)
         print('stream restarted after:', reason, flush=True)
 
     def check(self, code):
@@ -135,9 +143,9 @@ class Stick:
                 print(f'  stream stats: samples {samples}, packets {packets}, usb bytes {usb}, '
                       f'firmware state {state}, dma errors {dma}, stage {stage}', flush=True)
 
-    def configure(self, size):
+    def configure(self, size, reset_counters=0):
         self.generation += 1
-        self.disp.bs_display_configure(self.box, size, self.generation, 0)
+        self.disp.bs_display_configure(self.box, size, self.generation, reset_counters)
 
     def samples(self):
         out = (C.c_uint64 * 5)()
@@ -145,6 +153,7 @@ class Stick:
         return out[0]
 
     def tune(self, hz):
+        self.ensure_stream()                       # a stopped stream may refuse the retune
         with self.lock:
             self.check(self.lib.birriasdr_set_center_freq(self.dev, int(hz)))
             self.center = int(hz)
@@ -160,6 +169,8 @@ class Stick:
         count, first, gen = C.c_uint32(), C.c_uint64(), C.c_uint64()
         end = time.monotonic() + timeout
         while time.monotonic() < end:
+            if self.force_restart_at and time.monotonic() > self.force_restart_at:
+                self.force_restart_at, self.error = None, 'forced restart (BIRRIA_FORCE_RESTART_S)'
             if self.error:
                 self.ensure_stream()               # raises if it keeps failing
                 self.configure(size)
@@ -172,7 +183,7 @@ class Stick:
             if r == 1:
                 self.configure(size)               # too early: re-arm, or the mailbox waits 50 ms
             time.sleep(0.0002)
-        raise TimeoutError('no samples from the stick')
+        raise RuntimeError('no samples from the stick')   # not OSError: that means the client left
 
     def close(self):
         self.lib.birriasdr_cancel_async(self.dev)
@@ -250,7 +261,9 @@ class Session:
                 else:
                     time.sleep(0.02)
             except (OSError, ConnectionError):
-                break
+                if not self.ws.open:
+                    break
+                time.sleep(0.05)                    # a transient socket hiccup: keep the session
             except Exception as e:
                 self.ws.send_text(json.dumps({'type': 'error', 'message': str(e)}))
                 self.mode = 'idle'
