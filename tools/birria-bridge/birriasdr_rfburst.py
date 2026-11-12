@@ -108,6 +108,17 @@ void mt_rf_fast(bool enable)
     else
         BS_TRY(mt_rf_read(dev, port, address, &value));
     return mt_rf_write(dev, port, address, (value & ~clear) | set);"""),
+("""static void rf_remember(unsigned port, uint32_t address, uint32_t value)
+{
+    uint32_t *slot = rf_shadow_slot(port, address, true);""", """static void rf_remember(unsigned port, uint32_t address, uint32_t value)
+{
+    /* Startup touches far more registers than the table holds, and any access
+     * outside a live retune may change them: keep only the retune's own. */
+    if (!rf_fast) {
+        rf_shadow_count = 0;
+        return;
+    }
+    uint32_t *slot = rf_shadow_slot(port, address, true);"""),
 ("""    rf_opt_nopoll = getenv("BIRRIASDR_RF_NOPOLL") != NULL;
 }""", """    rf_opt_nopoll = getenv("BIRRIASDR_RF_NOPOLL") != NULL;
     if (getenv("BIRRIASDR_TRACE_TUNE"))
@@ -120,5 +131,5 @@ if '#include <stdio.h>' not in s:
     s = s.replace('#include "mt7921.h"', '#include "mt7921.h"\n#include <stdio.h>', 1)
 if '#include <stdlib.h>' not in s:
     s = s.replace('#include "mt7921.h"', '#include "mt7921.h"\n#include <stdlib.h>', 1)
-    (root / 'src/chips/mt7921_rf.c').write_text(s)
+(root / 'src/chips/mt7921_rf.c').write_text(s)
 print('done')
