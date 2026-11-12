@@ -1,7 +1,19 @@
 import type { SdrDevice, SdrDeviceInfo, GainControl } from '@/radio/types';
 
-/** Where tools/birria-bridge/birria_bridge.py listens. */
+/** Where tools/birria-bridge/birria_bridge.py listens by default. */
 export const BIRRIA_BRIDGE_URL = 'ws://127.0.0.1:8075';
+
+/**
+ * The bridge to connect to: `?bridge=ws://host:port` if given; the page's own server when the
+ * bridge serves this page (plain http on this computer); otherwise the default port.
+ */
+export function birriaBridgeUrl(): string {
+	const param = new URLSearchParams(location.search).get('bridge');
+	if (param) return param;
+	if (!import.meta.env.DEV && location.protocol === 'http:' && ['127.0.0.1', 'localhost', '[::1]'].includes(location.hostname))
+		return `ws://${location.host}`;
+	return BIRRIA_BRIDGE_URL;
+}
 
 /**
  * MT7921AU/MT7961 Wi-Fi stick through the local BirriaSDR bridge. Windows needs libusbK for
@@ -24,11 +36,11 @@ export class BirriaBridgeDevice implements SdrDevice {
 	private onData: ((data: ArrayBufferView) => void) | null = null;
 
 	async open(_device?: USBDevice): Promise<void> {
-		const ws = new WebSocket(BIRRIA_BRIDGE_URL);
+		const ws = new WebSocket(birriaBridgeUrl());
 		ws.binaryType = 'arraybuffer';
 		await new Promise<void>((resolve, reject) => {
 			ws.onopen = () => resolve();
-			ws.onerror = () => reject(new Error('BirriaSDR bridge not running. Start birria_bridge.py (or BirriaBridge.bat) and try again.'));
+			ws.onerror = () => reject(new Error('BirriaSDR bridge not running. Start BirriaSweep (START_BRIDGE_ONLY or START_WITH_PAGE) and try again.'));
 		});
 		ws.onmessage = (event) => {
 			if (typeof event.data === 'string') {
