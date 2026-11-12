@@ -98,7 +98,7 @@ FW = r'''/* On-chip retune (BIRRIASDR_FW_TUNE). The control block and script slo
 #define FW_CTRL 0x02041000u
 #define FW_MAGIC 0x31525446u
 #define FW_SLOTS 0x02041200u
-#define FW_SLOT_BYTES 256u
+#define FW_SLOT_BYTES 512u
 #define FW_NOT_HANDLED 1
 
 static size_t fw_op(uint32_t *words, size_t n, unsigned op, uint32_t address, uint32_t a, uint32_t b)
@@ -186,6 +186,7 @@ static int fw_retune(birriasdr_dev_t *dev, uint64_t hz)
         dev->mt7921.fw_routing_known = true;
     }
     n = fw_script(script, hz, dev->mt7921.fw_routing, &word);
+    if (n > FW_SLOT_BYTES / 4) return FW_NOT_HANDLED;   /* never overrun a slot */
     for (slot = 0; slot < dev->mt7921.fw_slots; ++slot)
         if (dev->mt7921.fw_slot_hz[slot] == hz) break;
     if (slot == dev->mt7921.fw_slots) {
@@ -220,6 +221,19 @@ static int fw_retune(birriasdr_dev_t *dev, uint64_t hz)
 }
 
 int mt_change_frequency(birriasdr_dev_t *dev, uint64_t frequency_hz)'''
+
+# Upgrade a tree patched by the first version (256-byte slots overflowed: the
+# script is 66 words).
+t = root / 'src/chips/mt7921_tune.c'
+s = t.read_text()
+if '#define FW_SLOT_BYTES 256u' in s:
+    s = s.replace('#define FW_SLOT_BYTES 256u', '#define FW_SLOT_BYTES 512u')
+    s = s.replace('''    n = fw_script(script, hz, dev->mt7921.fw_routing, &word);
+''', '''    n = fw_script(script, hz, dev->mt7921.fw_routing, &word);
+    if (n > FW_SLOT_BYTES / 4) return FW_NOT_HANDLED;   /* never overrun a slot */
+''', 1)
+    t.write_text(s)
+    print('upgraded src/chips/mt7921_tune.c to 512-byte script slots')
 
 edit('src/chips/mt7921_tune.c', [
     ('int mt_change_frequency(birriasdr_dev_t *dev, uint64_t frequency_hz)', FW),
