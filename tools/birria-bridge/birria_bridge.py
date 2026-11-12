@@ -409,7 +409,10 @@ class Session:
             tune, wait = (1000 * sum(v) / len(self.stats) for v in zip(*self.stats))
             work = 1000 * sum(self.work) / max(len(self.work), 1)
             self.work.clear()
-            print(f'per step: retune {tune:.2f} ms, wait for samples {wait:.2f} ms, FFT+send {work:.2f} ms', flush=True)
+            flat = getattr(self, 'flat', None)
+            shape = '' if not flat or flat['profile'] is None else \
+                f', filter shape removed: {flat["profile"].min():.1f}..{flat["profile"].max():.1f} dB'
+            print(f'per step: retune {tune:.2f} ms, wait for samples {wait:.2f} ms, FFT+send {work:.2f} ms{shape}', flush=True)
             self.stats.clear()
             self.last_report = now
 
