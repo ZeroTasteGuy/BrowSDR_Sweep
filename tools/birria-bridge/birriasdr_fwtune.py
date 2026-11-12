@@ -7,7 +7,7 @@ small RF script instead of ~30 separate USB register transactions:
   - the script for each frequency is uploaded once (one USB write) and cached
     in MCU memory for the rest of the stream,
   - each retune is then one 8-byte doorbell write plus completion polls.
-The firmware runs exactly the host's retune_high() sequence (same registers,
+The firmware runs (without blocking the sample DMA) exactly the host's retune_high() sequence (same registers,
 same order, same calibration poll). Without BIRRIASDR_FAST_TUNE=1 the host
 still reads the frequency word back and checks it. If the firmware does not
 answer within 20 ms, the driver switches back to the host path for the rest of
@@ -30,8 +30,10 @@ root = Path(sys.argv[1])
 def edit(rel, pairs):
     p = root / rel
     s = p.read_text()
-    for old, new in pairs:
-        if new in s:
+    for pair in pairs:
+        old, new = pair[:2]
+        marker = pair[2] if len(pair) > 2 else new
+        if marker in s:
             continue                       # already applied
         if old not in s:
             sys.exit(f'{rel}: anchor not found (apply birriasdr_rfburst.py first?):\n{old}')
@@ -236,12 +238,22 @@ if '#define FW_SLOT_BYTES 256u' in s:
     print('upgraded src/chips/mt7921_tune.c to 512-byte script slots')
 
 edit('src/chips/mt7921_tune.c', [
-    ('int mt_change_frequency(birriasdr_dev_t *dev, uint64_t frequency_hz)', FW),
+    ('int mt_change_frequency(birriasdr_dev_t *dev, uint64_t frequency_hz)', FW,
+     'static int fw_retune('),
     ('''        mt_rf_fast(true);
         result = mt_set_frequency(dev, frequency_hz);''', '''        mt_rf_fast(true);
         result = fw_retune(dev, frequency_hz);
         if (result == FW_NOT_HANDLED)
             result = mt_set_frequency(dev, frequency_hz);'''),
+    ('''    BS_TRY(fw_mmio_write(dev, FW_CTRL + 4, doorbell, 2));
+    mt_rf_forget();
+''', '''    BS_TRY(fw_mmio_write(dev, FW_CTRL + 4, doorbell, 2));
+    mt_rf_forget();
+    {   /* The script takes ~0.6-1 ms on chip: poll less, leave USB to the samples. */
+        uint64_t first = bs_now_ns() + UINT64_C(500000);
+        while (bs_now_ns() < first) {}
+    }
+'''),
 ])
 s = (root / 'src/chips/mt7921_tune.c').read_text()
 for inc in ('#include <stdio.h>', '#include <stdlib.h>'):
