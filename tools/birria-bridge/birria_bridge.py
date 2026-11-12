@@ -22,6 +22,7 @@ FULL_SCALE = 8192.0       # 14-bit samples
 DEFAULT_FFT_SIZE = 65536  # BrowSDR's level reference
 LIVE_SAMPLES = CAPTURE
 BATCH = CAPTURE           # samples per native callback (--batch)
+SETTLE_US = 500           # discarded after each retune (--settle-us)
 FLAGS = 1 | 2             # OPEN_EXPERIMENTAL_MT7961 | OPEN_EXPERIMENTAL_TUNING (| 4 for 80 MS/s)
 
 
@@ -162,7 +163,7 @@ class Session:
         self.center = 5_695_000_000
         self.range = (5600, 6000)
         self.fft_size = 1024
-        self.settle = 20_000                   # samples (0.5 ms) discarded after a retune
+        self.settle = SETTLE_US * RATE // 1_000_000   # samples discarded after a retune
         self.stats, self.last_report = [], 0.0
 
     def command(self, msg):
@@ -360,8 +361,10 @@ def main():
                     help='MS/s; 80 is experimental (70 MHz per sweep step, needs a fast USB 3 port)')
     ap.add_argument('--batch', type=int, default=CAPTURE,
                     help='samples per native callback, multiple of 2048 (larger can avoid overruns at 80 MS/s)')
+    ap.add_argument('--settle-us', type=int, default=SETTLE_US, help='microseconds discarded after each retune')
     args = ap.parse_args()
-    global RATE, SPAN_HZ, FLAGS, BATCH
+    global RATE, SPAN_HZ, FLAGS, BATCH, SETTLE_US
+    SETTLE_US = args.settle_us
     BATCH = max(CAPTURE, args.batch // 2048 * 2048)
     if args.rate == 80:
         RATE, SPAN_HZ, FLAGS = 80_000_000, 70_000_000, FLAGS | 4

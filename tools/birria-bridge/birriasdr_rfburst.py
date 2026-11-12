@@ -8,8 +8,11 @@ BIRRIASDR_TRACE_TUNE=1:
                          USB ops per update). Status reads stay real reads.
   BIRRIASDR_RF_BURST=1   write the bridge's command and data words in one 8-byte
                          vendor write (mt76's WRITE_EXT accepts multiple words).
-  BIRRIASDR_RF_NOPOLL=1  skip the busy poll after a write; the next access still
-                         polls before reading a result.
+  BIRRIASDR_RF_NOPOLL=1  skip the busy poll after a write (a USB round trip
+                         outlasts the SPI transfer); reads still poll.
+With SHADOW, the retune's routing read (RF 0x240) also comes from the shadow.
+BIRRIASDR_FAST_TUNE=1 (earlier patch) skips only the final readback. Never use
+=2: it skips PLL calibration and reception is lost.
 The final frequency readback of each retune catches a broken combination.
 """
 import sys
@@ -125,6 +128,32 @@ void mt_rf_fast(bool enable)
         fprintf(stderr, "rf options: shadow %d burst %d nopoll %d\\n",
                 rf_opt_shadow, rf_opt_burst, rf_opt_nopoll);
 }"""),
+("""        rf_idle[slot] = false;              /* the next access polls first */""",
+ """        /* A USB round trip (~80 us) outlasts the SPI transfer: treat the
+         * bridge as idle. The retune's final readback still checks it. */
+        rf_idle[slot] = true;"""),
+("""/* Read one analog register; TOP and Wi-Fi banks are explicitly distinguished. */""",
+ """/* During a live retune with BIRRIASDR_RF_SHADOW, return a register we set
+ * ourselves from the shadow (never use this for status registers). */
+int mt_rf_read_shadow(birriasdr_dev_t *dev, unsigned port, uint32_t address, uint32_t *value)
+{
+    uint32_t *known = rf_fast && rf_opt_shadow ? rf_shadow_slot(port, address, false) : NULL;
+    if (!known) return mt_rf_read(dev, port, address, value);
+    *value = *known;
+    return 0;
+}
+
+/* Read one analog register; TOP and Wi-Fi banks are explicitly distinguished. */"""),
+])
+edit('src/chips/mt7921.h', [
+("""void mt_rf_fast(bool enable);""", """void mt_rf_fast(bool enable);
+int mt_rf_read_shadow(birriasdr_dev_t *dev, unsigned port, uint32_t address, uint32_t *value);"""),
+])
+edit('src/chips/mt7921_tune.c', [
+("""    BS_TRY(mt_rf_read(dev,MT_SYNTH_PORT,0x240,&routing));
+    int result=mt_rf_update(dev,MT_SYNTH_PORT,0x240,0,0xf0000000);""",
+ """    BS_TRY(mt_rf_read_shadow(dev,MT_SYNTH_PORT,0x240,&routing));
+    int result=mt_rf_update(dev,MT_SYNTH_PORT,0x240,0,0xf0000000);"""),
 ])
 s = (root / 'src/chips/mt7921_rf.c').read_text()
 if '#include <stdio.h>' not in s:
