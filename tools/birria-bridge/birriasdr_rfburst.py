@@ -20,8 +20,9 @@ def edit(rel, pairs):
     p = root / rel
     s = p.read_text()
     for old, new in pairs:
-        if new in s:
-            continue
+        marker = next((l for l in new.splitlines() if l.strip() and l not in old), new)
+        if new in s or marker in s:
+            continue                       # already applied
         if old not in s:
             sys.exit(f'{rel}: anchor not found (apply birriasdr_fastio.py first?):\n{old}')
         s = s.replace(old, new, 1)
@@ -107,8 +108,16 @@ void mt_rf_fast(bool enable)
     else
         BS_TRY(mt_rf_read(dev, port, address, &value));
     return mt_rf_write(dev, port, address, (value & ~clear) | set);"""),
+("""    rf_opt_nopoll = getenv("BIRRIASDR_RF_NOPOLL") != NULL;
+}""", """    rf_opt_nopoll = getenv("BIRRIASDR_RF_NOPOLL") != NULL;
+    if (getenv("BIRRIASDR_TRACE_TUNE"))
+        fprintf(stderr, "rf options: shadow %d burst %d nopoll %d\\n",
+                rf_opt_shadow, rf_opt_burst, rf_opt_nopoll);
+}"""),
 ])
 s = (root / 'src/chips/mt7921_rf.c').read_text()
+if '#include <stdio.h>' not in s:
+    s = s.replace('#include "mt7921.h"', '#include "mt7921.h"\n#include <stdio.h>', 1)
 if '#include <stdlib.h>' not in s:
     s = s.replace('#include "mt7921.h"', '#include "mt7921.h"\n#include <stdlib.h>', 1)
     (root / 'src/chips/mt7921_rf.c').write_text(s)

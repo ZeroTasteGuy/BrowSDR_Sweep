@@ -19,8 +19,9 @@ def edit(rel, pairs):
     p = root / rel
     s = p.read_text()
     for old, new in pairs:
-        if new in s:
-            continue
+        marker = next((l for l in new.splitlines() if l.strip() and l not in old), new)
+        if new in s or marker in s:
+            continue                       # already applied
         if old not in s:
             sys.exit(f'{rel}: anchor not found:\n{old}')
         s = s.replace(old, new, 1)
