@@ -117,14 +117,21 @@ export const connectionMethods = {
 		if (this.workspace) return this.workspace.connectDevice(this, 'mock');
 		return this._connectMock();
 	},
-	async _connectMock(this: AppInstance) {
+	async connectBirria(this: AppInstance) {
+		this.devicePicker.show = false;
+		if (this.workspace) return this.workspace.connectDevice(this, 'birria');
+		return this._connectMock('birria');
+	},
+	/** Devices without WebUSB: the dev-only mock, or the BirriaSDR Wi-Fi stick through its local bridge. */
+	async _connectMock(this: AppInstance, kind: 'mock' | 'birria' = 'mock') {
 		this.deviceInfoCollapsed = true;
 		this.info.device = null;
-		if (!import.meta.env.DEV || !this.backend) return;
+		if ((kind === 'mock' && !import.meta.env.DEV) || !this.backend) return;
 		this._initAudioCtx(); // create AudioContext within user gesture
-		this.showMsg('Connecting Mock SDR...');
+		const label = kind === 'mock' ? 'Mock SDR' : 'BirriaSDR bridge';
+		this.showMsg(`Connecting ${label}...`);
 		try {
-			const ok = await this.backend.open('mock');
+			const ok = await this.backend.open(kind);
 			if (ok) {
 				this.connected = true;
 				const info = await this.backend.info();
@@ -139,13 +146,13 @@ export const connectionMethods = {
 					this.gainDeviceType = caps.deviceType;
 				}
 
-				this.showMsg('Connected to Mock SDR');
+				this.showMsg(`Connected to ${label}`);
 				await this.startStream();
 			} else {
-				this.showMsg('Failed to open Mock SDR.');
+				this.showMsg(`Failed to open ${label}.`);
 			}
 		} catch (e) {
-			this.showMsg('Mock Connect Error: ' + errorMessage(e));
+			this.showMsg(`${label} connect error: ` + errorMessage(e));
 		}
 	},
 	async disconnect(this: AppInstance) {

@@ -21,7 +21,7 @@ jobs:
 
   ui:
     name: Components and Storybook
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04 # Playwright 1.58 has no Chromium for ubuntu-latest (26.04) yet
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4

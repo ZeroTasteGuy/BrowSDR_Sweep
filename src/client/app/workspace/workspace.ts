@@ -102,7 +102,7 @@ export function createWorkspace(Receiver: ReceiverComponent) {
 			isDeviceConnected(this: WorkspaceInstance, device: USBDevice) {
 				return isDeviceConnected.call(this, runtime, device);
 			},
-			connectDevice(this: WorkspaceInstance, source: AppInstance, device: USBDevice | 'mock') {
+			connectDevice(this: WorkspaceInstance, source: AppInstance, device: USBDevice | 'mock' | 'birria') {
 				return connectDevice.call(this, runtime, source, device);
 			},
 			removeReceiver(this: WorkspaceInstance, id: string) {
@@ -212,35 +212,40 @@ function isDeviceConnected(this: WorkspaceInstance, runtime: WorkspaceRuntime, d
 	return runtime.claims.has(device);
 }
 
-async function connectDevice(this: WorkspaceInstance, runtime: WorkspaceRuntime, source: AppInstance, device: USBDevice | 'mock') {
+async function connectDevice(
+	this: WorkspaceInstance,
+	runtime: WorkspaceRuntime,
+	source: AppInstance,
+	device: USBDevice | 'mock' | 'birria',
+) {
 	if (this.mode === 'client') return;
 	if ([source._connectingDevice, source._removing].some(Boolean)) return;
-	if (device !== 'mock' && this.isDeviceConnected(device)) {
+	if (typeof device !== 'string' && this.isDeviceConnected(device)) {
 		source.showMsg('This SDR is already connected.');
 		return;
 	}
 	source._connectingDevice = true;
-	if (device !== 'mock') runtime.claims.set(device, source.receiverId);
+	if (typeof device !== 'string') runtime.claims.set(device, source.receiverId);
 	const app = source.connected ? await this.newReceiver() : source;
 	if (!app) {
-		if (device !== 'mock') runtime.claims.delete(device);
+		if (typeof device !== 'string') runtime.claims.delete(device);
 		source._connectingDevice = false;
 		return;
 	}
 	app._connectingDevice = true;
 	const entry = this.receivers.find((item: ReceiverEntry) => item.id === app.receiverId);
 	if (!entry) return;
-	if (device !== 'mock') runtime.claims.set(device, app.receiverId); // Reserve before any USB awaits.
+	if (typeof device !== 'string') runtime.claims.set(device, app.receiverId); // Reserve before any USB awaits.
 	let useLegacy = false;
 	try {
-		if (device !== 'mock') {
+		if (typeof device !== 'string') {
 			let index;
 			({ index, useLegacy } = await prepareUsbSettings.call(this, device, entry, useLegacy, runtime, app));
 			await app._connectToDevice(device, index);
-		} else await app._connectMock();
+		} else await app._connectMock(device);
 		if (!app.connected) {
 			if (useLegacy) runtime.legacyMigrationClaimed = false;
-			if (device !== 'mock') runtime.claims.delete(device);
+			if (typeof device !== 'string') runtime.claims.delete(device);
 			return;
 		}
 		app._initAudioCtx();
@@ -249,7 +254,7 @@ async function connectDevice(this: WorkspaceInstance, runtime: WorkspaceRuntime,
 		this.broadcastReceivers();
 	} catch (error) {
 		if (useLegacy && !app.connected) runtime.legacyMigrationClaimed = false;
-		if (device !== 'mock') runtime.claims.delete(device);
+		if (typeof device !== 'string') runtime.claims.delete(device);
 		this.error = errorMessage(error);
 	} finally {
 		source._connectingDevice = false;

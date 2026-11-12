@@ -10,6 +10,10 @@
 				<div class="device-picker-meta">{{ entry.productName || 'USB ' + entry.device.vendorId.toString(16) + ':' + entry.device.productId.toString(16) }}</div>
 				<div class="device-picker-meta" v-if="entry.device.serialNumber">Serial: {{ entry.device.serialNumber }}</div>
 			</div>
+			<UiButton variant="device" @click="connectBirria">
+				<span class="device-picker-name">Wi-Fi stick (BirriaSDR bridge)</span>
+				<span class="device-picker-meta">MT7921AU through birria_bridge.py on this PC</span>
+			</UiButton>
 			<UiButton v-if="isDevelopment" variant="device" @click="connectMock">
 				<span class="device-picker-name">Mock SDR</span>
 				<span class="device-picker-meta">Simulated receiver for testing</span>

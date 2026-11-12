@@ -79,6 +79,7 @@ import {
 	feedRemoteAudioChunk,
 } from '@/worker/streams/remote-clients';
 import { startRxStream } from '@/worker/streams/rx-stream';
+import { BirriaBridgeDevice } from '@/devices/birria/device';
 import { startSweepStream } from '@/worker/streams/sweep-stream';
 import type { SweepStreamOpts } from '@/worker/streams/types';
 import type { SweepPlan } from '@/devices/hackrf/types';
@@ -155,8 +156,14 @@ export class Backend {
 		this.wasm = await init();
 	}
 
-	async open(opts?: DeviceOpenOpts | 'mock'): Promise<boolean> {
+	async open(opts?: DeviceOpenOpts | 'mock' | 'birria'): Promise<boolean> {
 		if (this.device) throw new Error('A device is already connected to this receiver');
+		if (opts === 'birria') {
+			const device = new BirriaBridgeDevice();
+			await device.open();
+			this.device = device;
+			return true;
+		}
 		if (opts === 'mock') {
 			this.device = new MockHackRF();
 			await (this.device as MockHackRF).open();
