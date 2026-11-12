@@ -361,7 +361,7 @@ def main():
                     help='MS/s; 80 is experimental (70 MHz per sweep step, needs a fast USB 3 port)')
     ap.add_argument('--batch', type=int, default=CAPTURE,
                     help='samples per native callback, multiple of 2048 (larger can avoid overruns at 80 MS/s)')
-    ap.add_argument('--settle-us', type=int, default=SETTLE_US, help='microseconds discarded after each retune')
+    ap.add_argument('--settle-us', type=int, default=500, help='microseconds discarded after each retune')
     args = ap.parse_args()
     global RATE, SPAN_HZ, FLAGS, BATCH, SETTLE_US
     SETTLE_US = args.settle_us
