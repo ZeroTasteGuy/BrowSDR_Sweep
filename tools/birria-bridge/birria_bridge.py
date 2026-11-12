@@ -24,6 +24,8 @@ LIVE_SAMPLES = CAPTURE
 BATCH = CAPTURE           # samples per native callback (--batch)
 SETTLE_US = 500           # discarded after each retune (--settle-us)
 PIPELINE = False          # FFT+send on a worker thread (--pipeline)
+DC_OFFSET_HZ = 2_000_000  # the stick notches ~0.5 MHz at its tuned frequency (DC); see --dc-offset-mhz
+DC_GUARD_HZ = 400_000     # half-width treated as notched around the tuned frequency
 READ_PRIORITY = 1         # Windows priority of the native read thread (--read-priority; 1 = above normal)
 FLAGS = 1 | 2             # OPEN_EXPERIMENTAL_MT7961 | OPEN_EXPERIMENTAL_TUNING (| 4 for 80 MS/s)
 
@@ -209,6 +211,10 @@ class FakeStick:
             if abs(f - self.center) < RATE / 2:
                 x += 3000 * np.exp(2j * np.pi * (f - self.center) * t)
         self.n += size
+        spectrum = np.fft.fft(x)                     # the real stick notches ~0.5 MHz at DC
+        notch = int(250_000 / RATE * size)
+        spectrum[:notch + 1] = spectrum[-notch:] = 0
+        x = np.fft.ifft(spectrum)
         return np.stack([x.real, x.imag], 1).astype(np.int16)
 
 
@@ -253,7 +259,7 @@ class Session:
         while self.ws.open:
             try:
                 if self.mode == 'rx':
-                    iq = self.stick.take(LIVE_SAMPLES)
+                    iq = self.live_snapshot()
                     self.ws.send_binary(iq.tobytes())
                     time.sleep(1 / 60)              # display snapshots, not a continuous stream
                 elif self.mode == 'sweep':
@@ -269,6 +275,41 @@ class Session:
                 self.mode = 'idle'
         self.jobs.put(None)                         # ends the FFT worker
 
+    def live_snapshot(self):
+        """One display snapshot centred on self.center without the stick's DC notch.
+
+        The stick is tuned DC_OFFSET_HZ below and above the centre on alternate snapshots. Each
+        capture is moved to the centre in the frequency domain, and every bin is taken from the
+        capture that has it farther from its own notch and band edge. The newest capture is merged
+        with the previous one, so each snapshot costs one retune. The result is turned back into
+        I/Q, so the page shows the full 40 MHz with no gap."""
+        n = LIVE_SAMPLES
+        if not DC_OFFSET_HZ:
+            return self.stick.take(n)
+        bin_hz = RATE / n
+        k = int(round(DC_OFFSET_HZ / bin_hz))
+        with self.lock:
+            centre = self.center
+            last = getattr(self, 'live_last', None)
+            sign = -last[1] if last and last[0] == centre else -1
+            self.stick.tune(centre + sign * k * bin_hz)
+            mark = self.stick.samples() + self.settle
+        iq = self.stick.take(n, after=mark)
+        x = (iq[:, 0] + 1j * iq[:, 1]).astype(np.complex64)
+        spectrum = np.roll(np.fft.fftshift(np.fft.fft(x)), sign * k)   # bins now relative to centre
+        self.live_last = (centre, sign, spectrum)
+        offsets = (np.arange(n) - n // 2) * bin_hz
+        edge = RATE / 2 * 0.95
+        def score(s):                                  # distance from that capture's notch and edge
+            d = np.abs(offsets - s * k * bin_hz)
+            return np.minimum(d - DC_GUARD_HZ, edge - d)
+        if last and last[0] == centre:
+            merged = np.where(score(sign) >= score(last[1]), spectrum, last[2])
+        else:                                          # first capture at this centre: notch stays once
+            merged = np.where(score(sign) > -edge, spectrum, 0)   # drop the bins that wrapped around
+        y = np.fft.ifft(np.fft.ifftshift(merged))
+        return np.clip(np.round(np.stack([y.real, y.imag], 1)), -8192, 8191).astype(np.int16)
+
     def sweep_once(self):
         """One pass in SPAN_HZ steps. Each step is sent as a uint64 start frequency (Hz) of its
         first bin, then float32 dB bins at the plan's bin width, levelled like BrowSDR's FFT."""
@@ -278,20 +319,26 @@ class Session:
         keep = int(SPAN_HZ / bin_hz) // 2 * 2
         plan = (fft_size, bin_hz, keep, np.hanning(fft_size), 10 * np.log10(self.fft_size / DEFAULT_FFT_SIZE))
         capture = max(CAPTURE, fft_size)
+        # Alternate passes tune each step DC_OFFSET_HZ above/below its centre, so the stick's DC
+        # notch never sits on the same frequency twice in a row; fft_send fills it from the
+        # previous pass (one sweep old) instead of leaving a gap.
+        self.parity = -getattr(self, 'parity', 1)
+        shift = int(round(DC_OFFSET_HZ / 2 / bin_hz)) * self.parity   # half: keeps step edges off the roll-off
+        shift = max(-(fft_size - keep) // 2 + 1, min((fft_size - keep) // 2 - 1, shift))
         f = start * 1_000_000
         while self.mode == 'sweep' and f < stop * 1_000_000 and self.ws.open:
             centre = f + keep // 2 * bin_hz
             t0 = time.perf_counter()
             with self.lock:
-                self.stick.tune(centre)
+                self.stick.tune(centre + shift * bin_hz)
                 mark = self.stick.samples() + self.settle
             t1 = time.perf_counter()
             iq = self.stick.take(capture, after=mark)
             t2 = time.perf_counter()
             if PIPELINE:
-                self.jobs.put((centre, iq, plan))   # waits only if the worker is two steps behind
+                self.jobs.put((centre, iq, plan, shift))   # waits only if the worker is two steps behind
             else:
-                self.fft_send(centre, iq, plan)
+                self.fft_send(centre, iq, plan, shift)
             self.stats.append((t1 - t0, t2 - t1))
             f += keep * bin_hz
         self.report()
@@ -300,17 +347,34 @@ class Session:
         while (job := self.jobs.get()) is not None:
             self.fft_send(*job)
 
-    def fft_send(self, centre, iq, plan):
+    def fft_send(self, centre, iq, plan, shift=0):
+        """`shift`: the stick was tuned `shift` bins above `centre` (see sweep_once)."""
         t = time.perf_counter()
         fft_size, bin_hz, keep, window, offset_db = plan
         x = (iq[:, 0] + 1j * iq[:, 1]).astype(np.complex64) / FULL_SCALE
         frames = x[: len(x) // fft_size * fft_size].reshape(-1, fft_size)
         power = np.mean(np.abs(np.fft.fftshift(np.fft.fft(frames * window, axis=1), axes=1)) ** 2, axis=0)
         db = 10 * np.log10(power / fft_size ** 2 + 1e-20) + offset_db
-        lo = fft_size // 2 - keep // 2
-        first_hz = centre + (lo - fft_size // 2) * bin_hz
+        lo = fft_size // 2 - keep // 2 - shift      # the same RF slice whatever the tuning offset
+        first_hz = centre + (lo + shift - fft_size // 2) * bin_hz
+        row = db[lo:lo + keep].copy()
+        if DC_OFFSET_HZ:
+            # Bins inside the notch (around the tuned frequency): take them from the previous
+            # pass, which was tuned to the other side; interpolate only if there is none yet.
+            notch = keep // 2 + shift + np.arange(-int(DC_GUARD_HZ / bin_hz), int(DC_GUARD_HZ / bin_hz) + 1)
+            notch = notch[(notch >= 0) & (notch < keep)]
+            key = (int(round(first_hz)), keep)
+            previous = self.previous_rows.get(key) if hasattr(self, 'previous_rows') else None
+            if previous is not None:
+                row[notch] = previous[notch]
+            elif len(notch):
+                a, b = max(notch[0] - 1, 0), min(notch[-1] + 1, keep - 1)
+                row[notch] = np.interp(notch, [a, b], [row[a], row[b]])
+            if not hasattr(self, 'previous_rows'):
+                self.previous_rows = {}
+            self.previous_rows[key] = row.copy()
         try:
-            self.ws.send_binary(struct.pack('<Q', int(round(first_hz))) + db[lo:lo + keep].astype('<f4').tobytes())
+            self.ws.send_binary(struct.pack('<Q', int(round(first_hz))) + row.astype('<f4').tobytes())
         except (OSError, ConnectionError):
             pass
         self.work.append(time.perf_counter() - t)
@@ -436,7 +500,7 @@ def serve(stick, port):
 
 
 def main():
-    global RATE, SPAN_HZ, FLAGS, BATCH, SETTLE_US, CAPTURE, LIVE_SAMPLES, READ_PRIORITY, PIPELINE
+    global RATE, SPAN_HZ, FLAGS, BATCH, SETTLE_US, CAPTURE, LIVE_SAMPLES, READ_PRIORITY, PIPELINE, DC_OFFSET_HZ
     ap = argparse.ArgumentParser(description=__doc__.split('\n')[0])
     ap.add_argument('--lib', type=Path, help='folder with birriasdr.dll, birria_display.dll, libusb-1.0.dll')
     ap.add_argument('--port', type=int, default=8075)
@@ -453,8 +517,11 @@ def main():
     ap.add_argument('--read-priority', type=int, default=READ_PRIORITY,
                     help='Windows thread priority of the native reader (0 normal, 1 above normal, 2 highest)')
     ap.add_argument('--settle-us', type=int, default=500, help='microseconds discarded after each retune')
+    ap.add_argument('--dc-offset-mhz', type=float, default=DC_OFFSET_HZ / 1e6,
+                    help='tune this far off centre to hide the stick\'s DC notch (0 = off)')
     args = ap.parse_args()
     SETTLE_US, READ_PRIORITY, PIPELINE = args.settle_us, args.read_priority, args.pipeline
+    DC_OFFSET_HZ = int(args.dc_offset_mhz * 1e6)
     CAPTURE = LIVE_SAMPLES = max(2048, args.capture // 2048 * 2048)
     BATCH = max(CAPTURE, args.batch // 2048 * 2048)
     if args.rate == 80:
