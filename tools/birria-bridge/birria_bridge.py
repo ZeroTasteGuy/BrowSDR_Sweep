@@ -171,7 +171,7 @@ class Session:
         self.mode, self.lock = 'idle', threading.Lock()
         self.center = 5_695_000_000
         self.range = (5600, 6000)
-        self.scale = 1 / 64                    # 14-bit samples to int8 sweep blocks
+        self.scale = None                      # int16 to int8 sweep blocks; set from the first capture
 
     def command(self, msg):
         cmd = msg.get('cmd')
@@ -187,6 +187,7 @@ class Session:
                 self.stick.tune(self.center)
             elif cmd == 'sweep':
                 self.range = (int(msg['startMHz']), int(msg['stopMHz']))
+                self.scale = None
                 self.mode = 'sweep'
             elif cmd == 'stop':
                 self.mode = 'idle'
@@ -219,7 +220,11 @@ class Session:
                 mark = self.stick.samples() + SETTLE
             iq = self.stick.take(CAPTURE, after=mark)
             x = iq[:, 0].astype(np.float64) + 1j * iq[:, 1]
-            spec = np.fft.fft(x - x.mean())
+            x -= x.mean()
+            if self.scale is None:
+                # Fixed per sweep so steps stay comparable: noise at about 4 LSB, room for +30 dB.
+                self.scale = 4 / max(np.sqrt(np.mean(np.abs(x) ** 2) / 2), 1e-3)
+            spec = np.fft.fft(x)
             lo1, lo2 = f + OFFSET_HZ, f + STEP_HZ // 4 + OFFSET_HZ
             frame = (shifted_block(spec, lo1 - centre, f, self.scale) +
                      shifted_block(spec, lo2 - centre, f + STEP_HZ // 4, self.scale))
