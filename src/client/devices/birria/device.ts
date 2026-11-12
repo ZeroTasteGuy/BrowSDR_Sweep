@@ -6,8 +6,7 @@ export const BIRRIA_BRIDGE_URL = 'ws://127.0.0.1:8075';
 /**
  * MT7921AU/MT7961 Wi-Fi stick through the local BirriaSDR bridge. Windows needs libusbK for
  * this stick, which WebUSB can't use, so the bridge opens it natively and streams over a
- * localhost WebSocket. Sweep blocks arrive in hackrf_sweep's format, so the HackRF sweep
- * assembler stitches them unchanged. Live receive gets 65536-sample snapshots, not a gap-free
+ * localhost WebSocket. Sweep steps arrive already FFT'd (BirriaSweepAssembler). Live receive gets 65536-sample snapshots, not a gap-free
  * stream: good for spectrum and waterfall, not for demodulation.
  */
 export class BirriaBridgeDevice implements SdrDevice {
@@ -82,9 +81,10 @@ export class BirriaBridgeDevice implements SdrDevice {
 		return this.send({ cmd: 'rx' });
 	}
 
-	startSweep(range: { startMHz: number; stopMHz: number }, callback: (data: ArrayBufferView) => void): Promise<void> {
+	/** The bridge FFTs each step itself at the plan's bin width; see BirriaSweepAssembler. */
+	startSweep(range: { startMHz: number; stopMHz: number; fftSize?: number }, callback: (data: ArrayBufferView) => void): Promise<void> {
 		this.onData = callback;
-		return this.send({ cmd: 'sweep', startMHz: range.startMHz, stopMHz: range.stopMHz });
+		return this.send({ cmd: 'sweep', startMHz: range.startMHz, stopMHz: range.stopMHz, fftSize: range.fftSize ?? 1024 });
 	}
 
 	stopRx(): Promise<void> {

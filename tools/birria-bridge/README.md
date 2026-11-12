@@ -21,12 +21,13 @@ Without a stick, `--fake` serves synthetic tones at 5695, 5806 and 5917 MHz.
 
 ## How it works
 
-- One continuous 40 MS/s stream; each sweep step is a live retune (no restart), a 2 ms settle, and
-  16384 samples.
-- Each 20 MHz step is cut digitally into the two interleaved 20 MS/s tunings that `hackrf_sweep` uses,
-  and sent as its 16384-byte blocks (0x7F 0x7F header). BrowSDR's sweep assembler stitches them
-  unchanged.
-- Live receive sends 65536-sample snapshots, not a gap-free stream: good for spectrum and waterfall,
+- One continuous 40 MS/s stream, read in 16384-sample batches. Each sweep step is a live retune
+  (no restart), a 0.5 ms settle, and one 16384-sample capture.
+- Steps are 35 MHz, the flat middle of the 40 MHz filter. The bridge FFTs each step at the bin
+  width BrowSDR asked for and sends the dB bins; BrowSDR only places them.
+- The bridge window prints, every 2 s, how long a step spends retuning, waiting for samples and
+  computing.
+- Live receive sends 16384-sample snapshots at up to 60 per second, not a gap-free stream: good for spectrum and waterfall,
   not for demodulation.
 - Gain is the raw LNA (0-3), filter (0-8) and digital (0-12) codes. Default 1, 4, 0.
 - A known DMA glitch (some 32-sample blocks shifted by 2 samples) only adds a little to the noise floor.

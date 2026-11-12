@@ -4,6 +4,7 @@ import type { Backend } from '@/worker/runtime/backend';
 import type { SamplesCallback } from '@/worker/runtime/callbacks.types';
 import { planSweep, SweepAssembler, sweepWindow } from '@/devices/hackrf/sweep';
 import type { SweepPlan } from '@/devices/hackrf/types';
+import { BirriaSweepAssembler } from '@/devices/birria/sweep';
 import type { SweepStreamOpts } from './types';
 import { configureReceiveGains } from './usb-diagnostic';
 
@@ -25,13 +26,15 @@ export async function startSweepStream(
 	backend._tuningOffsetHz = 0;
 
 	backend._disposeSpectrum?.();
-	const fft = new FFT(plan.fftSize, sweepWindow(plan.fftSize));
-	backend._disposeSpectrum = () => fft.free();
+	// The BirriaSDR bridge sends finished spectra; only the HackRF needs the WASM FFT.
+	const birria = device.deviceType === 'birria';
+	const fft = birria ? null : new FFT(plan.fftSize, sweepWindow(plan.fftSize));
+	backend._disposeSpectrum = () => fft?.free();
 
 	let lastEmit = 0;
 	let rateStart = performance.now();
 	let rateSweeps = 0;
-	const assembler = new SweepAssembler(plan, fft, (line) => {
+	const onSweep = (line: Float32Array) => {
 		const now = performance.now();
 		rateSweeps++;
 		if (now - rateStart >= 1000) {
@@ -43,7 +46,8 @@ export async function startSweepStream(
 		lastEmit = now;
 		const copy = line.slice();
 		spectrumCallback(Comlink.transfer(copy, [copy.buffer]));
-	});
+	};
+	const assembler = fft ? new SweepAssembler(plan, fft, onSweep) : new BirriaSweepAssembler(plan, onSweep);
 
 	await configureReceiveGains(device, opts.gains);
 	await device.startSweep(plan, (data) => {

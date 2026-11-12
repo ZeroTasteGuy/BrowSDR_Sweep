@@ -4,9 +4,8 @@ Browsers can't open this stick over WebUSB on Windows (it needs libusbK), so thi
 program opens it with the BirriaSDR native library and serves it to the BrowSDR
 "Wi-Fi stick (BirriaSDR bridge)" device over ws://127.0.0.1:8075.
 
-Sweep mode emulates hackrf_sweep: every 20 MHz step is one 40 MS/s capture
-retuned live (no restart), split into the two interleaved 20 MS/s tunings that
-BrowSDR's HackRF sweep assembler expects (16384-byte blocks, 0x7F 0x7F header).
+Sweep mode retunes one continuous 40 MS/s stream live (no restart) in 35 MHz
+steps, FFTs each step here and sends the dB bins ready to place.
 
 Run:  python birria_bridge.py [--lib DIR] [--port 8075] [--fake]
 Needs numpy, and birriasdr.dll, birria_display.dll and libusb-1.0.dll from a
@@ -17,13 +16,11 @@ from pathlib import Path
 import numpy as np
 
 RATE = 40_000_000
-STEP_HZ = 20_000_000      # hackrf_sweep TUNE_STEP
-OFFSET_HZ = 7_500_000     # hackrf_sweep OFFSET: LO = block frequency + 7.5 MHz
-BLOCK_BYTES = 16384
-BLOCK_SAMPLES = (BLOCK_BYTES - 10) // 2
-CAPTURE = 2 * 8192        # 40 MS/s samples per step, decimated to 8192 at 20 MS/s
-SETTLE = 80_000           # samples (2 ms) discarded after a retune
-LIVE_SAMPLES = 65536
+CAPTURE = 16384           # 40 MS/s samples per step (0.41 ms) and per native callback
+SPAN_HZ = 35_000_000      # used per step: the flat middle of the 40 MHz filter
+FULL_SCALE = 8192.0       # 14-bit samples
+DEFAULT_FFT_SIZE = 65536  # BrowSDR's level reference
+LIVE_SAMPLES = CAPTURE
 FLAGS = 1 | 2             # OPEN_EXPERIMENTAL_MT7961 | OPEN_EXPERIMENTAL_TUNING
 
 
@@ -63,9 +60,11 @@ class Stick:
         for name, args, res in [('create', [], P), ('configure', [P, C.c_uint32, C.c_uint64, C.c_int], C.c_int),
                                 ('take', [P, C.POINTER(C.c_int16), C.c_uint32, C.POINTER(C.c_uint32),
                                           C.POINTER(C.c_uint64), C.POINTER(C.c_uint64)], C.c_int),
-                                ('counters', [P, C.POINTER(C.c_uint64)], None), ('read', [P, P], C.c_int)]:
+                                ('counters', [P, C.POINTER(C.c_uint64)], None)]:
             fn = getattr(disp, 'bs_display_' + name); fn.argtypes, fn.restype = args, res
         self.disp = disp
+        L.birriasdr_read_async.argtypes = [P, P, P, C.c_uint32, C.c_uint32]
+        L.birriasdr_read_async.restype = C.c_int
         self.box = disp.bs_display_create()
         self.scratch = np.empty((262144, 2), np.int16)
         self.dev = P()
@@ -85,7 +84,10 @@ class Stick:
             raise RuntimeError('BirriaSDR: ' + self.lib.birriasdr_strerror(code).decode())
 
     def _read(self):
-        code = self.disp.bs_display_read(self.dev, self.box)
+        # The display mailbox's native callback, with small buffers: a fresh window every 0.41 ms
+        # instead of every 6.5 ms, and nothing crosses into Python per callback.
+        callback = C.cast(self.disp.bs_display_callback, C.c_void_p)
+        code = self.lib.birriasdr_read_async(self.dev, callback, self.box, 0, CAPTURE)
         if code < 0:
             self.error = self.lib.birriasdr_strerror(code).decode()
             print('stream stopped:', self.error, flush=True)
@@ -118,7 +120,7 @@ class Stick:
                                           len(self.scratch), C.byref(count), C.byref(first), C.byref(gen))
             if r == 1 and gen.value == self.generation and first.value >= after:
                 return self.scratch[:count.value].copy()
-            time.sleep(0.001)
+            time.sleep(0.0002)
         raise TimeoutError('no samples from the stick')
 
     def close(self):
@@ -147,31 +149,15 @@ class FakeStick:
         return np.stack([x.real, x.imag], 1).astype(np.int16)
 
 
-def shifted_block(spectrum, lo_offset_hz, block_hz, scale):
-    """One hackrf_sweep block: 20 MS/s int8 I/Q centred lo_offset_hz from the capture centre."""
-    n = len(spectrum)                          # FFT of CAPTURE samples at 40 MS/s
-    shift = int(round(lo_offset_hz / RATE * n))
-    half = n // 2                              # keep +-10 MHz around the new LO
-    sel = np.roll(spectrum, -shift)
-    sel = np.concatenate([sel[:half // 2], sel[-half // 2:]])
-    iq = np.fft.ifft(sel) * (half / n) * scale
-    iq = iq[-BLOCK_SAMPLES:]
-    out = np.empty(BLOCK_BYTES, np.int8)
-    out[0] = out[1] = 0x7F
-    out[2:10] = np.frombuffer(struct.pack('<Q', int(block_hz)), np.int8)
-    inter = np.empty(2 * BLOCK_SAMPLES, np.float64)
-    inter[0::2], inter[1::2] = iq.real, iq.imag
-    out[10:] = np.clip(np.round(inter), -127, 127).astype(np.int8)
-    return out.tobytes()
-
-
 class Session:
     def __init__(self, stick, ws):
         self.stick, self.ws = stick, ws
         self.mode, self.lock = 'idle', threading.Lock()
         self.center = 5_695_000_000
         self.range = (5600, 6000)
-        self.scale = None                      # int16 to int8 sweep blocks; set from the first capture
+        self.fft_size = 1024
+        self.settle = 20_000                   # samples (0.5 ms) discarded after a retune
+        self.stats, self.last_report = [], 0.0
 
     def command(self, msg):
         cmd = msg.get('cmd')
@@ -187,7 +173,7 @@ class Session:
                 self.stick.tune(self.center)
             elif cmd == 'sweep':
                 self.range = (int(msg['startMHz']), int(msg['stopMHz']))
-                self.scale = None
+                self.fft_size = min(4096, max(16, int(msg.get('fftSize', 1024))))
                 self.mode = 'sweep'
             elif cmd == 'stop':
                 self.mode = 'idle'
@@ -200,6 +186,7 @@ class Session:
                 if self.mode == 'rx':
                     iq = self.stick.take(LIVE_SAMPLES)
                     self.ws.send_binary(iq.tobytes())
+                    time.sleep(1 / 60)              # display snapshots, not a continuous stream
                 elif self.mode == 'sweep':
                     self.sweep_once()
                 else:
@@ -211,25 +198,42 @@ class Session:
                 self.mode = 'idle'
 
     def sweep_once(self):
+        """One pass in SPAN_HZ steps. Each step is sent as a uint64 start frequency (Hz) of its
+        first bin, then float32 dB bins at the plan's bin width, levelled like BrowSDR's FFT."""
         start, stop = self.range
+        fft_size = 2 * self.fft_size               # 40 MS/s: same bin width as fft_size at 20 MS/s
+        bin_hz = RATE / fft_size
+        keep = int(SPAN_HZ / bin_hz) // 2 * 2
+        window = np.hanning(fft_size)
+        offset_db = 10 * np.log10(self.fft_size / DEFAULT_FFT_SIZE)
         f = start * 1_000_000
         while self.mode == 'sweep' and f < stop * 1_000_000 and self.ws.open:
-            centre = f + STEP_HZ // 2          # both interleaved LOs sit 2.5 MHz either side
+            centre = f + keep // 2 * bin_hz
+            t0 = time.perf_counter()
             with self.lock:
                 self.stick.tune(centre)
-                mark = self.stick.samples() + SETTLE
+                mark = self.stick.samples() + self.settle
+            t1 = time.perf_counter()
             iq = self.stick.take(CAPTURE, after=mark)
-            x = iq[:, 0].astype(np.float64) + 1j * iq[:, 1]
-            x -= x.mean()
-            if self.scale is None:
-                # Fixed per sweep so steps stay comparable: noise at about 4 LSB, room for +30 dB.
-                self.scale = 4 / max(np.sqrt(np.mean(np.abs(x) ** 2) / 2), 1e-3)
-            spec = np.fft.fft(x)
-            lo1, lo2 = f + OFFSET_HZ, f + STEP_HZ // 4 + OFFSET_HZ
-            frame = (shifted_block(spec, lo1 - centre, f, self.scale) +
-                     shifted_block(spec, lo2 - centre, f + STEP_HZ // 4, self.scale))
-            self.ws.send_binary(frame)
-            f += STEP_HZ
+            t2 = time.perf_counter()
+            x = (iq[:, 0] + 1j * iq[:, 1]).astype(np.complex64) / FULL_SCALE
+            frames = x[: len(x) // fft_size * fft_size].reshape(-1, fft_size)
+            power = np.mean(np.abs(np.fft.fftshift(np.fft.fft(frames * window, axis=1), axes=1)) ** 2, axis=0)
+            db = 10 * np.log10(power / fft_size ** 2 + 1e-20) + offset_db
+            lo = fft_size // 2 - keep // 2
+            first_hz = centre + (lo - fft_size // 2) * bin_hz
+            self.ws.send_binary(struct.pack('<Q', int(round(first_hz))) + db[lo:lo + keep].astype('<f4').tobytes())
+            self.stats.append((t1 - t0, t2 - t1, time.perf_counter() - t2))
+            f += keep * bin_hz
+        self.report()
+
+    def report(self):
+        now = time.monotonic()
+        if self.stats and now - self.last_report > 2:
+            tune, wait, work = (1000 * sum(v) / len(self.stats) for v in zip(*self.stats))
+            print(f'per step: retune {tune:.2f} ms, wait for samples {wait:.2f} ms, FFT+send {work:.2f} ms', flush=True)
+            self.stats.clear()
+            self.last_report = now
 
 
 class WebSocket:
