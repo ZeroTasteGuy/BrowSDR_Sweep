@@ -26,6 +26,7 @@ SETTLE_US = 500           # discarded after each retune (--settle-us)
 PIPELINE = False          # FFT+send on a worker thread (--pipeline)
 DC_OFFSET_HZ = 2_000_000  # the stick notches ~0.5 MHz at its tuned frequency (DC); see --dc-offset-mhz
 DC_GUARD_HZ = 400_000     # half-width treated as notched around the tuned frequency
+FLAT_STEPS = 24           # sweep steps per flatness update (--flat-steps; 0 = no flatness correction)
 READ_PRIORITY = 1         # Windows priority of the native read thread (--read-priority; 1 = above normal)
 FLAGS = 1 | 2             # OPEN_EXPERIMENTAL_MT7961 | OPEN_EXPERIMENTAL_TUNING (| 4 for 80 MS/s)
 
@@ -355,6 +356,7 @@ class Session:
         frames = x[: len(x) // fft_size * fft_size].reshape(-1, fft_size)
         power = np.mean(np.abs(np.fft.fftshift(np.fft.fft(frames * window, axis=1), axes=1)) ** 2, axis=0)
         db = 10 * np.log10(power / fft_size ** 2 + 1e-20) + offset_db
+        db -= self.flatness(db)
         lo = fft_size // 2 - keep // 2 - shift      # the same RF slice whatever the tuning offset
         first_hz = centre + (lo + shift - fft_size // 2) * bin_hz
         row = db[lo:lo + keep].copy()
@@ -378,6 +380,28 @@ class Session:
         except (OSError, ConnectionError):
             pass
         self.work.append(time.perf_counter() - t)
+
+    def flatness(self, db):
+        """The stick's receive filter makes the noise floor sag toward the edges of every capture,
+        the same shape at every tuning. Learn it from the steps themselves: every FLAT_STEPS steps,
+        take the per-bin median over them (signals sit at different bins in each step, so they drop
+        out), smooth it across ~0.2 MHz, and follow it slowly. Returns the correction in dB,
+        zero at the capture's middle, so the overall level stays where it was."""
+        if FLAT_STEPS <= 0:
+            return 0.0
+        state = getattr(self, 'flat', None)
+        if state is None or state['size'] != len(db):          # new plan: learn again
+            state = self.flat = {'size': len(db), 'profile': None, 'recent': []}
+        state['recent'].append(db.copy())
+        if len(state['recent']) >= FLAT_STEPS:
+            shape = np.median(np.array(state['recent']), axis=0)
+            width = max(1, len(db) // 200)
+            shape = np.convolve(np.pad(shape, width, mode='edge'), np.ones(2 * width + 1) / (2 * width + 1), 'valid')
+            middle = len(db) // 2
+            shape -= np.median(shape[middle - len(db) // 8: middle + len(db) // 8])
+            state['profile'] = shape if state['profile'] is None else 0.8 * state['profile'] + 0.2 * shape
+            state['recent'].clear()
+        return 0.0 if state['profile'] is None else state['profile']
 
     def report(self):
         now = time.monotonic()
@@ -500,7 +524,7 @@ def serve(stick, port):
 
 
 def main():
-    global RATE, SPAN_HZ, FLAGS, BATCH, SETTLE_US, CAPTURE, LIVE_SAMPLES, READ_PRIORITY, PIPELINE, DC_OFFSET_HZ
+    global RATE, SPAN_HZ, FLAGS, BATCH, SETTLE_US, CAPTURE, LIVE_SAMPLES, READ_PRIORITY, PIPELINE, DC_OFFSET_HZ, FLAT_STEPS
     ap = argparse.ArgumentParser(description=__doc__.split('\n')[0])
     ap.add_argument('--lib', type=Path, help='folder with birriasdr.dll, birria_display.dll, libusb-1.0.dll')
     ap.add_argument('--port', type=int, default=8075)
@@ -517,11 +541,14 @@ def main():
     ap.add_argument('--read-priority', type=int, default=READ_PRIORITY,
                     help='Windows thread priority of the native reader (0 normal, 1 above normal, 2 highest)')
     ap.add_argument('--settle-us', type=int, default=500, help='microseconds discarded after each retune')
+    ap.add_argument('--flat-steps', type=int, default=FLAT_STEPS,
+                    help='sweep steps per update of the learned filter-shape correction (0 = off)')
     ap.add_argument('--dc-offset-mhz', type=float, default=DC_OFFSET_HZ / 1e6,
                     help='tune this far off centre to hide the stick\'s DC notch (0 = off)')
     args = ap.parse_args()
     SETTLE_US, READ_PRIORITY, PIPELINE = args.settle_us, args.read_priority, args.pipeline
     DC_OFFSET_HZ = int(args.dc_offset_mhz * 1e6)
+    FLAT_STEPS = args.flat_steps
     CAPTURE = LIVE_SAMPLES = max(2048, args.capture // 2048 * 2048)
     BATCH = max(CAPTURE, args.batch // 2048 * 2048)
     if args.rate == 80:
