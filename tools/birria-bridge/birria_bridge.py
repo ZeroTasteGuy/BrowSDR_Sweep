@@ -17,11 +17,11 @@ import numpy as np
 
 RATE = 40_000_000
 CAPTURE = 16384           # 40 MS/s samples per step (0.41 ms) and per native callback
-SPAN_HZ = 35_000_000      # used per step: the flat middle of the 40 MHz filter
+SPAN_HZ = 35_000_000      # used per step: the flat middle of the filter (70 MHz at 80 MS/s)
 FULL_SCALE = 8192.0       # 14-bit samples
 DEFAULT_FFT_SIZE = 65536  # BrowSDR's level reference
 LIVE_SAMPLES = CAPTURE
-FLAGS = 1 | 2             # OPEN_EXPERIMENTAL_MT7961 | OPEN_EXPERIMENTAL_TUNING
+FLAGS = 1 | 2             # OPEN_EXPERIMENTAL_MT7961 | OPEN_EXPERIMENTAL_TUNING (| 4 for 80 MS/s)
 
 
 class Gain(C.Structure):
@@ -53,6 +53,7 @@ class Stick:
         for name, args, res in [('open_ex', [C.POINTER(P), C.c_uint32, C.c_uint32], C.c_int),
                                 ('close', [P], C.c_int), ('set_center_freq', [P, C.c_uint64], C.c_int),
                                 ('set_sample_rate', [P, C.c_uint32], C.c_int),
+                                ('set_tuner_bandwidth', [P, C.c_uint32], C.c_int),
                                 ('set_tuner_gain_mode', [P, C.c_int], C.c_int),
                                 ('set_gain_codes', [P, C.POINTER(Gain)], C.c_int),
                                 ('cancel_async', [P], C.c_int), ('strerror', [C.c_int], C.c_char_p)]:
@@ -72,6 +73,8 @@ class Stick:
         self.error = None
         self.check(L.birriasdr_open_ex(C.byref(self.dev), 0, FLAGS))
         self.check(L.birriasdr_set_sample_rate(self.dev, RATE))
+        if RATE == 80_000_000:
+            self.check(L.birriasdr_set_tuner_bandwidth(self.dev, RATE))
         self.check(L.birriasdr_set_tuner_gain_mode(self.dev, 1))
         self.set_gain(1, 4, 0)
         self.check(L.birriasdr_set_center_freq(self.dev, 5_695_000_000))
@@ -145,7 +148,7 @@ class FakeStick:
         t = np.arange(size) / RATE
         x = 20 * (self.rng.standard_normal(size) + 1j * self.rng.standard_normal(size))
         for f in (5_695e6, 5_806e6, 5_917e6):
-            if abs(f - self.center) < 20e6:
+            if abs(f - self.center) < RATE / 2:
                 x += 3000 * np.exp(2j * np.pi * (f - self.center) * t)
         self.n += size
         return np.stack([x.real, x.imag], 1).astype(np.int16)
@@ -203,7 +206,7 @@ class Session:
         """One pass in SPAN_HZ steps. Each step is sent as a uint64 start frequency (Hz) of its
         first bin, then float32 dB bins at the plan's bin width, levelled like BrowSDR's FFT."""
         start, stop = self.range
-        fft_size = 2 * self.fft_size               # 40 MS/s: same bin width as fft_size at 20 MS/s
+        fft_size = self.fft_size * RATE // 20_000_000   # same bin width as fft_size at 20 MS/s
         bin_hz = RATE / fft_size
         keep = int(SPAN_HZ / bin_hz) // 2 * 2
         window = np.hanning(fft_size)
@@ -352,7 +355,12 @@ def main():
     ap.add_argument('--lib', type=Path, help='folder with birriasdr.dll, birria_display.dll, libusb-1.0.dll')
     ap.add_argument('--port', type=int, default=8075)
     ap.add_argument('--fake', action='store_true', help='synthetic tones, no stick needed')
+    ap.add_argument('--rate', type=int, choices=(40, 80), default=40,
+                    help='MS/s; 80 is experimental (70 MHz per sweep step, needs a fast USB 3 port)')
     args = ap.parse_args()
+    global RATE, SPAN_HZ, FLAGS
+    if args.rate == 80:
+        RATE, SPAN_HZ, FLAGS = 80_000_000, 70_000_000, FLAGS | 4
     if args.fake:
         stick = FakeStick()
     else:
