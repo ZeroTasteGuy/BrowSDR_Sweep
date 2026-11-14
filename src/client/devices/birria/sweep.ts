@@ -3,7 +3,8 @@ import type { SweepPlan } from '@/devices/hackrf/types';
 /**
  * Stitches the BirriaSDR bridge's sweep steps into one line over the plan's range. Each message is
  * a little-endian uint64 frequency of its first bin in Hz, then float32 dB bins at the plan's bin
- * width; the bridge already did the FFT. onSweep fires each time the steps wrap back to the start.
+ * width; the bridge already did the FFT. onSweep fires each time the steps wrap back to the start
+ * (or repeat, for a range the bridge covers with a single tuning).
  */
 export class BirriaSweepAssembler {
 	readonly line: Float32Array;
@@ -24,7 +25,9 @@ export class BirriaSweepAssembler {
 		if (data.byteLength < 12) return;
 		const view = new DataView(data.buffer, data.byteOffset, data.byteLength);
 		const firstHz = view.getUint32(0, true) + view.getUint32(4, true) * 2 ** 32;
-		if (firstHz < this.lastHz) {
+		// A step at or before the previous one starts a new sweep. A range that fits in one tuning
+		// repeats the same step, so every message is a whole sweep.
+		if (firstHz <= this.lastHz) {
 			if (this.started) {
 				this.sweepCount++;
 				this.onSweep(this.line);

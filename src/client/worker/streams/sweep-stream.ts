@@ -34,6 +34,10 @@ export async function startSweepStream(
 	let lastEmit = 0;
 	let rateStart = performance.now();
 	let rateSweeps = 0;
+	// The bridge can deliver hundreds of sweeps a second for a narrow range, more than the display
+	// draws. Keep each bin's peak over the sweeps between two drawn frames, so a short burst
+	// still reaches the waterfall instead of being dropped with the frames that aren't drawn.
+	let held: Float32Array | null = null;
 	const onSweep = (line: Float32Array) => {
 		const now = performance.now();
 		rateSweeps++;
@@ -42,9 +46,14 @@ export async function startSweepStream(
 			rateStart = now;
 			rateSweeps = 0;
 		}
+		if (birria) {
+			if (!held || held.length !== line.length) held = line.slice();
+			else for (let i = 0; i < line.length; i++) if (line[i] > held[i]) held[i] = line[i];
+		}
 		if (now - lastEmit < 1000 / backend._spectrumFps) return;
 		lastEmit = now;
-		const copy = line.slice();
+		const copy = held ?? line.slice();
+		held = null;
 		spectrumCallback(Comlink.transfer(copy, [copy.buffer]));
 	};
 	const assembler = fft ? new SweepAssembler(plan, fft, onSweep) : new BirriaSweepAssembler(plan, onSweep);
